@@ -11,7 +11,9 @@ import { VastuChecklist } from './components/VastuChecklist';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AIChat } from './components/AIChat';
 import Markdown from 'react-markdown';
-import { Home, History, MessageSquare, Plus, AlignLeft, RefreshCw, Clock, Lock } from 'lucide-react';
+import { Home, History, MessageSquare, Plus, AlignLeft, RefreshCw, Clock, Lock, Download } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { exportToPDF } from './utils/pdfExport';
 
 export default function App() {
   const { profiles, currentProfileId, currentProfile, isAuthenticated, addProfile, switchProfile, authenticate, logout, deleteProfile } = useProfiles();
@@ -229,8 +231,15 @@ export default function App() {
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-4xl mx-auto">
+            <AnimatePresence mode="wait">
             {activeTab === 'analyzer' && currentHouseId && (
-              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <motion.div 
+                key="analyzer"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
                 
                 <div className="flex justify-between items-end mb-8">
                   <div>
@@ -257,30 +266,47 @@ export default function App() {
 
                 {history.length > 0 && history[0].timestamp > Date.now() - 5000 && (
                   <div className="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-stone-200 border-l-4 border-l-amber-500">
-                    <h3 className="text-lg font-bold text-stone-800 mb-4">Latest Analysis Report</h3>
-                    <div className="prose prose-stone max-w-none">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-bold text-stone-800">Latest Analysis Report</h3>
+                      <button onClick={() => exportToPDF('latest-report', `Vastu_Report_${currentHouse?.name}.pdf`)} className="flex items-center gap-2 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg text-sm font-medium transition-colors"><Download className="w-4 h-4"/> Export PDF</button>
+                    </div>
+                    <div id="latest-report" className="prose prose-stone max-w-none bg-white p-4 rounded-xl">
                       <Markdown>{history[0].report}</Markdown>
                     </div>
                   </div>
                 )}
-              </div>
+              </motion.div>
             )}
             
             {activeTab === 'analyzer' && !currentHouseId && (
-              <div className="text-center py-12 bg-white rounded-2xl border border-stone-200">
+              <motion.div 
+                key="analyzer-empty"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="text-center py-12 bg-white rounded-2xl border border-stone-200"
+              >
                 <Home className="w-12 h-12 text-stone-300 mx-auto mb-4" />
                 <p className="text-stone-500 font-medium">Please select or create a house from the sidebar first.</p>
-              </div>
+              </motion.div>
             )}
 
             {activeTab === 'chat' && (
-              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full max-w-3xl mx-auto">
+              <motion.div 
+                key="chat"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="h-full max-w-3xl mx-auto"
+              >
                 <div className="mb-6">
                   <h2 className="text-3xl font-bold text-stone-900">Ask the Expert</h2>
                   <p className="text-stone-500 mt-2">Chat with our AI Vastu Expert for personalized advice.</p>
                 </div>
                 <AIChat messages={messages} onSendMessage={sendMessage} loading={chatLoading} />
-              </div>
+              </motion.div>
             )}
 
             {activeTab === 'history' && (() => {
@@ -309,7 +335,13 @@ export default function App() {
               });
 
               return (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <motion.div 
+                  key="history"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
                   <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
                     <div>
                       <h2 className="text-3xl font-bold text-stone-900">Global Analysis History</h2>
@@ -388,7 +420,12 @@ export default function App() {
                       {filteredHistory.map(item => (
                         <div key={item.id} className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 overflow-hidden flex flex-col md:flex-row gap-6">
                           <div className="w-full md:w-64 shrink-0 flex flex-col gap-2">
-                            {item.houseName && <h4 className="font-bold text-stone-800 mb-1">{item.houseName}</h4>}
+                            {item.houseName && (
+                              <>
+                                <h4 className="font-bold text-stone-800 mb-1">{item.houseName}</h4>
+                                <button onClick={() => exportToPDF(`report-${item.id}`, `Vastu_Report_${item.houseName}_${new Date(item.timestamp).getTime()}.pdf`)} className="flex items-center justify-center gap-2 px-2 py-1 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded text-xs font-medium transition-colors mt-1 w-fit"><Download className="w-3 h-3"/> PDF</button>
+                              </>
+                            )}
                             {item.floorPlans && item.floorPlans.length > 0 && (
                               <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">{item.floorPlans.map((fp, i) => (<img key={`fp-${i}`} src={fp} alt={`Floor Plan ${i}`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200" />))}</div>
                             )}
@@ -409,7 +446,7 @@ export default function App() {
                             </div>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                            <div id={`report-${item.id}`} className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar bg-white p-2">
                               <Markdown>{item.report}</Markdown>
                             </div>
                           </div>
@@ -417,9 +454,10 @@ export default function App() {
                       ))}
                     </div>
                   )}
-                </div>
+                </motion.div>
               );
             })()}
+            </AnimatePresence>
           </div>
         </main>
       </div>

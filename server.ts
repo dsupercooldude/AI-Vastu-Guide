@@ -57,7 +57,7 @@ async function createServer() {
 
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-  const FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+  const FALLBACK_MODELS = ['gemini-3.5-flash', 'gemini-3.5-flash-lite'];
   
   class ModelMutexes {
   constructor() {
@@ -109,6 +109,7 @@ async function generateWithFallback(options, preferredModel = null) {
         return { response, model };
       } catch (error) {
         lastError = error;
+        console.error(`Error with model ${model}:`, error.message);
         const errorMessage = error.message || '';
         if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('404') || errorMessage.includes('400') || errorMessage.includes('not found') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE') || errorMessage.includes('500') || errorMessage.includes('high demand') || errorMessage.includes('temporarily overloaded')) {
           continue; 
@@ -186,7 +187,7 @@ Task: If floor plans are provided (there may be multiple for different floors), 
           config: {
             systemInstruction: VASTU_SYSTEM_INSTRUCTION,
             temperature: 0.2,
-            tools: [{ googleSearch: {} }]
+            /* removed googleSearch */
           }
         });
         console.log(`Successfully generated analysis with ${model}`);
@@ -238,7 +239,7 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
           config: {
             systemInstruction: VASTU_SYSTEM_INSTRUCTION,
             temperature: 0.2,
-            tools: [{ googleSearch: {} }]
+            /* removed googleSearch */
           }
         });
         
@@ -275,7 +276,7 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
         config: {
           systemInstruction: VASTU_SYSTEM_INSTRUCTION,
           temperature: 0.7,
-          tools: [{ googleSearch: {} }]
+          /* removed googleSearch */
         }
       });
       console.log(`Successfully generated chat with ${model}`);
@@ -309,7 +310,7 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
         config: {
           systemInstruction: VASTU_SYSTEM_INSTRUCTION,
           temperature: 0.7,
-          tools: [{ googleSearch: {} }]
+          /* removed googleSearch */
         }
       });
       console.log(`Successfully generated baseline with ${model}`);
@@ -339,9 +340,8 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
     });
   }
 
-  const port = process.env.PORT || 3000;
-  app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+  app.listen(3000, "0.0.0.0", () => {
+    console.log("Server running on port 3000");
   });
 }
 

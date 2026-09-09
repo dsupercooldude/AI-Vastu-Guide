@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, AlertCircle, ArrowRight, X, LayoutTemplate, Plus, Maximize2, RefreshCw } from 'lucide-react';
+import { Camera, Upload, AlertCircle, ArrowRight, X, LayoutTemplate, Plus, Maximize2, RefreshCw, MapPin } from 'lucide-react';
 import { ConfidenceMeter } from './ConfidenceMeter';
 import { LiveCamera } from './LiveCamera';
 import { AIEngineUsage } from './AIEngineUsage';
+import { VastuMap } from './VastuMap';
 
 interface VastuAnalyzerProps {
   onAnalyze: (images: {data: string, mimeType: string}[], floorPlans: {data: string, mimeType: string}[], description: string, houseName: string) => Promise<any>;
@@ -24,6 +25,7 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
   const [images, setImages] = useState<ImageItem[]>([]);
   const [floorPlans, setFloorPlans] = useState<ImageItem[]>([]);
   const [description, setDescription] = useState('');
+  const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
   const [error, setError] = useState('');
   
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -142,10 +144,11 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
       return;
     }
     try {
+      const locationContext = location ? `\nProperty coordinates: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}. Please note its magnetic orientation based on these coordinates.` : '';
       await onAnalyze(
         images.map(img => ({ data: img.base64, mimeType: img.mimeType })),
         floorPlans.map(fp => ({ data: fp.base64, mimeType: fp.mimeType })),
-        description,
+        description + locationContext,
         houseName
       );
       // Reset form
@@ -283,11 +286,23 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
 
           <hr className="border-stone-100" />
 
+          {/* Map Section */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-stone-800 flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-amber-600" />
+              2. Property Location & Orientation
+            </h3>
+            <p className="text-sm text-stone-500 mb-2">Pin your house location to determine precise magnetic north alignment.</p>
+            <VastuMap onLocationSelect={(lat, lng) => setLocation({ lat, lng })} />
+          </div>
+
+          <hr className="border-stone-100" />
+
           {/* Photos Section */}
           <div className="space-y-3">
             <h3 className="font-semibold text-stone-800 flex items-center gap-2">
               <Camera className="w-5 h-5 text-amber-600" />
-              2. Room / Angle Photos
+              3. Room / Angle Photos
             </h3>
             
             <div className="flex flex-wrap gap-4">
@@ -348,7 +363,7 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
 
           {/* Details Section */}
           <div className="space-y-3">
-            <h3 className="font-semibold text-stone-800">3. Additional Details</h3>
+            <h3 className="font-semibold text-stone-800">4. Additional Details</h3>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}

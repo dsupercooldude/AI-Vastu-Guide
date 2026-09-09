@@ -1,215 +1,82 @@
 const fs = require('fs');
 let content = fs.readFileSync('src/App.tsx', 'utf8');
 
+// Replace standard div with motion.div for analyzer (with house)
 content = content.replace(
-  'const { history, analyzeHouse, loading: analysisLoading } = useAnalysisHistory(currentHouseId);',
-  'const { history, allHistory, analyzeHouse, loading: analysisLoading } = useAnalysisHistory(currentHouseId);\n  const [searchQuery, setSearchQuery] = useState("");\n  const [dateRange, setDateRange] = useState({ start: "", end: "" });\n  const [minScore, setMinScore] = useState(0);'
+  /{activeTab === 'analyzer' && currentHouseId && \(\s*<div className="animate-in fade-in slide-in-from-bottom-4 duration-500">/,
+  `{activeTab === 'analyzer' && currentHouseId && (\n              <motion.div \n                key="analyzer"\n                initial={{ opacity: 0, y: 10 }}\n                animate={{ opacity: 1, y: 0 }}\n                exit={{ opacity: 0, y: -10 }}\n                transition={{ duration: 0.2 }}\n              >`
 );
 
-const historyTabContentOld = `{activeTab === 'history' && (
-              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="mb-8">
-                  <h2 className="text-3xl font-bold text-stone-900">Analysis History</h2>
-                  <p className="text-stone-500 mt-2">Past Vastu reports for {currentHouse?.name || 'this house'}.</p>
-                </div>
+// Replace standard div with motion.div for analyzer (without house)
+content = content.replace(
+  /{activeTab === 'analyzer' && !currentHouseId && \(\s*<div className="text-center py-12 bg-white rounded-2xl border border-stone-200">/,
+  `{activeTab === 'analyzer' && !currentHouseId && (\n              <motion.div \n                key="analyzer-empty"\n                initial={{ opacity: 0, y: 10 }}\n                animate={{ opacity: 1, y: 0 }}\n                exit={{ opacity: 0, y: -10 }}\n                transition={{ duration: 0.2 }}\n                className="text-center py-12 bg-white rounded-2xl border border-stone-200"\n              >`
+);
 
-                {history.length > 0 && (
-                  <div className="h-64 mb-8 bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
-                    <h3 className="font-bold text-stone-800 mb-4">Compliance Score Trend</h3>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={[...history].reverse().map(h => ({ date: new Date(h.timestamp).toLocaleDateString(), score: h.score || 0 }))}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
-                        <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
-                        <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
-                        <Tooltip 
-                          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        />
-                        <Line type="monotone" dataKey="score" stroke="#d97706" strokeWidth={3} dot={{ r: 4, fill: '#d97706' }} activeDot={{ r: 6 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
+// Replace standard div with motion.div for chat
+content = content.replace(
+  /{activeTab === 'chat' && \(\s*<div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full max-w-3xl mx-auto">/,
+  `{activeTab === 'chat' && (\n              <motion.div \n                key="chat"\n                initial={{ opacity: 0, y: 10 }}\n                animate={{ opacity: 1, y: 0 }}\n                exit={{ opacity: 0, y: -10 }}\n                transition={{ duration: 0.2 }}\n                className="h-full max-w-3xl mx-auto"\n              >`
+);
 
-                
-                {history.length === 0 ? (
-                  <div className="text-center py-12 bg-white rounded-2xl border border-stone-200">
-                    <History className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-                    <p className="text-stone-500 font-medium">No history found</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {history.map(item => (
-                      <div key={item.id} className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 overflow-hidden flex flex-col md:flex-row gap-6">
-                        <div className="w-full md:w-64 shrink-0 flex flex-col gap-2">
-                          {item.floorPlans && item.floorPlans.length > 0 && (
-                            <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">{item.floorPlans.map((fp, i) => (<img key={\`fp-\${i}\`} src={fp} alt={\`Floor Plan \${i}\`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200" />))}</div>
-                          )}
-                          {item.images && item.images.length > 0 && (
-                            <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
-                              {item.images.map((img, i) => (
-                                <img key={i} src={img} alt={\`Room \${i}\`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200" />
-                              ))}
-                            </div>
-                          )}
-                          <div className="mt-2 space-y-1">
-                            <p className="text-xs text-stone-400">{new Date(item.timestamp).toLocaleDateString()}</p>
-                            {item.score !== undefined && (
-                              <div className="mt-2 inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold text-xs">
-                                Score: {item.score}/100
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                            <Markdown>{item.report}</Markdown>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}`;
+// Replace standard div with motion.div for history
+content = content.replace(
+  /<div className="animate-in fade-in slide-in-from-bottom-4 duration-500">/,
+  `<motion.div \n                  key="history"\n                  initial={{ opacity: 0, y: 10 }}\n                  animate={{ opacity: 1, y: 0 }}\n                  exit={{ opacity: 0, y: -10 }}\n                  transition={{ duration: 0.2 }}\n                >`
+);
 
-const historyTabContentNew = \`{activeTab === 'history' && (() => {
-              // Filter logic
-              const filteredHistory = allHistory.filter(item => {
-                // House name match
-                const hName = item.houseName?.toLowerCase() || '';
-                const q = searchQuery.toLowerCase();
-                if (q && !hName.includes(q)) return false;
+// Close motion divs (this is tricky, so I'll just change the enclosing element of `activeTab` rendering blocks)
+// I will wrap the entire activeTab block inside AnimatePresence
+content = content.replace(
+  /<div className="max-w-4xl mx-auto">\s*{activeTab === 'analyzer'/g,
+  '<div className="max-w-4xl mx-auto">\n            <AnimatePresence mode="wait">\n            {activeTab === \'analyzer\''
+);
 
-                // Score threshold
-                if (item.score !== undefined && item.score < minScore) return false;
+// Replace the end of the history block correctly to close the motion div
+content = content.replace(
+  /}\(\)\)}\s*<\/div>\s*<\/main>/,
+  '}(())}\n            </AnimatePresence>\n          </div>\n        </main>'
+);
 
-                // Date range
-                if (dateRange.start) {
-                  if (new Date(item.timestamp) < new Date(dateRange.start)) return false;
-                }
-                if (dateRange.end) {
-                  // +1 day to include the end date fully
-                  const end = new Date(dateRange.end);
-                  end.setDate(end.getDate() + 1);
-                  if (new Date(item.timestamp) >= end) return false;
-                }
+// Add PDF Export button for the Latest Analysis Report in the Analyzer view
+content = content.replace(
+  /<h3 className="text-lg font-bold text-stone-800 mb-4">Latest Analysis Report<\/h3>/,
+  `<div className="flex justify-between items-center mb-4">\n                      <h3 className="text-lg font-bold text-stone-800">Latest Analysis Report</h3>\n                      <button onClick={() => exportToPDF('latest-report', \`Vastu_Report_\${currentHouse?.name}.pdf\`)} className="flex items-center gap-2 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg text-sm font-medium transition-colors"><Download className="w-4 h-4"/> Export PDF</button>\n                    </div>`
+);
+content = content.replace(
+  /<div className="prose prose-stone max-w-none">\s*<Markdown>{history\[0\]\.report}<\/Markdown>\s*<\/div>/,
+  `<div id="latest-report" className="prose prose-stone max-w-none bg-white p-4 rounded-xl">\n                      <Markdown>{history[0].report}</Markdown>\n                    </div>`
+);
 
-                return true;
-              });
+// Add PDF Export button for History items
+content = content.replace(
+  /<h4 className="font-bold text-stone-800 mb-1">{item\.houseName}<\/h4>/g,
+  `<h4 className="font-bold text-stone-800 mb-1">{item.houseName}</h4>\n                            <button onClick={() => exportToPDF(\`report-\${item.id}\`, \`Vastu_Report_\${item.houseName}_\${new Date(item.timestamp).getTime()}.pdf\`)} className="flex items-center justify-center gap-2 px-2 py-1 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded text-xs font-medium transition-colors mt-1 w-fit"><Download className="w-3 h-3"/> PDF</button>`
+);
+content = content.replace(
+  /<div className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar">/g,
+  `<div id={\`report-\${item.id}\`} className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar bg-white p-2">`
+);
 
-              return (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
-                    <div>
-                      <h2 className="text-3xl font-bold text-stone-900">Global Analysis History</h2>
-                      <p className="text-stone-500 mt-2">Past Vastu reports across all your households.</p>
-                    </div>
-                  </div>
+// Now let's handle closing tags for motion.div which replaced div
+content = content.replace(
+  /<\/div>\s*\)\}\s*{activeTab === 'analyzer' && !currentHouseId/g,
+  '</motion.div>\n            )}\n            \n            {activeTab === \'analyzer\' && !currentHouseId'
+);
 
-                  <div className="mb-8 bg-white p-4 rounded-2xl shadow-sm border border-stone-200 flex flex-col md:flex-row gap-4 items-end">
-                    <div className="flex-1 w-full">
-                      <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1">House Name</label>
-                      <input 
-                        type="text" 
-                        placeholder="Search by name..." 
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-amber-500"
-                      />
-                    </div>
-                    <div className="w-full md:w-auto flex gap-2">
-                      <div>
-                        <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1">Start Date</label>
-                        <input 
-                          type="date"
-                          value={dateRange.start}
-                          onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                          className="w-full md:w-32 px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-amber-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1">End Date</label>
-                        <input 
-                          type="date"
-                          value={dateRange.end}
-                          onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                          className="w-full md:w-32 px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-amber-500"
-                        />
-                      </div>
-                    </div>
-                    <div className="w-full md:w-32">
-                      <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1">Min Score: {minScore}</label>
-                      <input 
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={minScore}
-                        onChange={e => setMinScore(parseInt(e.target.value))}
-                        className="w-full accent-amber-500"
-                      />
-                    </div>
-                  </div>
+content = content.replace(
+  /<\/div>\s*\)\}\s*{activeTab === 'chat'/g,
+  '</motion.div>\n            )}\n\n            {activeTab === \'chat\''
+);
 
-                  {filteredHistory.length > 0 && (
-                    <div className="h-64 mb-8 bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
-                      <h3 className="font-bold text-stone-800 mb-4">Compliance Score Trend</h3>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={[...filteredHistory].reverse().map(h => ({ date: new Date(h.timestamp).toLocaleDateString(), score: h.score || 0 }))}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
-                          <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
-                          <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
-                          <Tooltip 
-                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                          />
-                          <Line type="monotone" dataKey="score" stroke="#d97706" strokeWidth={3} dot={{ r: 4, fill: '#d97706' }} activeDot={{ r: 6 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
+content = content.replace(
+  /<\/div>\s*\)\}\s*{activeTab === 'history'/g,
+  '</motion.div>\n            )}\n\n            {activeTab === \'history\''
+);
 
-                  {filteredHistory.length === 0 ? (
-                    <div className="text-center py-12 bg-white rounded-2xl border border-stone-200">
-                      <History className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-                      <p className="text-stone-500 font-medium">No reports match your filters.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      {filteredHistory.map(item => (
-                        <div key={item.id} className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 overflow-hidden flex flex-col md:flex-row gap-6">
-                          <div className="w-full md:w-64 shrink-0 flex flex-col gap-2">
-                            {item.houseName && <h4 className="font-bold text-stone-800 mb-1">{item.houseName}</h4>}
-                            {item.floorPlans && item.floorPlans.length > 0 && (
-                              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">{item.floorPlans.map((fp, i) => (<img key={\`fp-\${i}\`} src={fp} alt={\`Floor Plan \${i}\`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200" />))}</div>
-                            )}
-                            {item.images && item.images.length > 0 && (
-                              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
-                                {item.images.map((img, i) => (
-                                  <img key={i} src={img} alt={\`Room \${i}\`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200" />
-                                ))}
-                              </div>
-                            )}
-                            <div className="mt-2 space-y-1">
-                              <p className="text-xs text-stone-400">{new Date(item.timestamp).toLocaleDateString()}</p>
-                              {item.score !== undefined && (
-                                <div className="mt-2 inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold text-xs">
-                                  Score: {item.score}/100
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                              <Markdown>{item.report}</Markdown>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}\`;
-
-content = content.replace(historyTabContentOld, historyTabContentNew);
+content = content.replace(
+  /<\/div>\s*\);\s*}\)\(\)}/g,
+  '</motion.div>\n              );\n            })()}'
+);
 
 fs.writeFileSync('src/App.tsx', content);
