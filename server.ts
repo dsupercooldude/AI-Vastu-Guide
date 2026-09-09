@@ -334,9 +334,9 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, '..', 'dist', 'client')));
+    app.use(express.static(path.join(process.cwd(), 'dist')));
     app.use('*', (req, res) => {
-      res.sendFile(path.join(__dirname, '..', 'dist', 'client', 'index.html'));
+      res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
     });
   }
 

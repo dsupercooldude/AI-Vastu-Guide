@@ -20,7 +20,7 @@ export function AIEngineUsage() {
         setEngines(data.engines);
       }
     } catch (e) {
-      console.error('Failed to fetch AI quota', e);
+      // Silently fail on network errors during server restarts
     } finally {
       setLoading(false);
     }

@@ -36,7 +36,7 @@ export default function App() {
     fetch('/api/quota')
       .then(res => res.json())
       .then(data => setAiQuota(data))
-      .catch(console.error);
+      .catch(() => {});
   }, [history]); // refresh quota when history changes (i.e. analysis run)
 
 
