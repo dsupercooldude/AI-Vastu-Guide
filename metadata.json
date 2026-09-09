@@ -1,0 +1,10 @@
+{
+  "name": "Vastu AI",
+  "description": "An AI-powered Vastu Shastra companion that helps map your household using compass directions and photos, providing compliance reports and expert chat.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
