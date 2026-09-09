@@ -7,6 +7,10 @@ interface MapSearchProps {
 }
 
 export function MapSearch({ onLocationSelect }: MapSearchProps) {
+  const onLocationSelectRef = useRef(onLocationSelect);
+  useEffect(() => {
+    onLocationSelectRef.current = onLocationSelect;
+  }, [onLocationSelect]);
   const map = useMap();
   const placesLib = useMapsLibrary('places');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -18,7 +22,7 @@ export function MapSearch({ onLocationSelect }: MapSearchProps) {
     let autocompleteElement: any = null;
     
     try {
-      if (false) {
+      if (placesLib.PlaceAutocompleteElement) {
         autocompleteElement = new placesLib.PlaceAutocompleteElement();
         autocompleteElement.id = "place-autocomplete-input";
         // Append it to our container
@@ -40,7 +44,7 @@ export function MapSearch({ onLocationSelect }: MapSearchProps) {
             }
           }
           
-          onLocationSelect(location.lat(), location.lng());
+          onLocationSelectRef.current(location.lat(), location.lng());
         });
       } else {
          // fallback if new element isn't available
@@ -66,7 +70,7 @@ export function MapSearch({ onLocationSelect }: MapSearchProps) {
                map.setZoom(17);
              }
            }
-           onLocationSelect(loc.lat(), loc.lng());
+           onLocationSelectRef.current(loc.lat(), loc.lng());
          });
       }
     } catch (e) {
@@ -74,11 +78,9 @@ export function MapSearch({ onLocationSelect }: MapSearchProps) {
     }
 
     return () => {
-      if (containerRef.current && autocompleteElement) {
-        containerRef.current.innerHTML = '';
-      }
+      if (containerRef.current) { containerRef.current.innerHTML = ''; }
     };
-  }, [placesLib, map, onLocationSelect]);
+  }, [placesLib, map]);
 
   return (
     <div className="relative w-full shadow-md rounded-lg overflow-hidden bg-white flex items-center">
