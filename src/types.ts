@@ -23,8 +23,10 @@ export interface AnalysisHistory {
   id: string;
   houseId: string;
   images: string[];
-  floorPlan?: string;
+  floorPlans?: string[];
   description: string;
   report: string;
+  score?: number;
+  houseName?: string;
   timestamp: number;
 }

@@ -17,7 +17,10 @@ export function useEngineState() {
     setIsRefreshing(true);
     try {
       const res = await fetch('/api/refresh-baseline', { method: 'POST' });
-      if (!res.ok) throw new Error('Failed to refresh baseline');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to refresh baseline');
+      }
       
       // Increment confidence slightly up to 99%
       const increment = Math.floor(Math.random() * 5) + 2;
@@ -30,7 +33,11 @@ export function useEngineState() {
       localStorage.setItem('vastu_confidence', newConf.toString());
       localStorage.setItem('vastu_last_updated', now.toString());
     } catch (e) {
-      console.error('Error refreshing baseline', e);
+      if (e instanceof Error && e.message.includes('Quota')) {
+        console.warn('AI Quota exceeded while refreshing baseline, will try again later.');
+      } else {
+        console.error('Error refreshing baseline', e);
+      }
     } finally {
       setIsRefreshing(false);
     }

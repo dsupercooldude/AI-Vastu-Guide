@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, AlertCircle, ArrowRight, X, LayoutTemplate, Plus, Maximize2, RefreshCw } from 'lucide-react';
+const fs = require('fs');
+
+const content = `import { useState, useRef } from 'react';
+import { Camera, Upload, AlertCircle, ArrowRight, X, LayoutTemplate, Plus } from 'lucide-react';
 import { ConfidenceMeter } from './ConfidenceMeter';
-import { LiveCamera } from './LiveCamera';
-import { AIEngineUsage } from './AIEngineUsage';
 
 interface VastuAnalyzerProps {
   onAnalyze: (images: {data: string, mimeType: string}[], floorPlans: {data: string, mimeType: string}[], description: string, houseName: string) => Promise<any>;
@@ -25,33 +25,10 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
   const [floorPlans, setFloorPlans] = useState<ImageItem[]>([]);
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
-  
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [previewImage, setPreviewImage] = useState<ImageItem | null>(null);
-  const [retakeImageId, setRetakeImageId] = useState<string | null>(null);
-  
-  const [loadingStage, setLoadingStage] = useState(0);
 
   const floorPlanInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    let interval: any;
-    if (loading) {
-      setLoadingStage(0);
-      interval = setInterval(() => {
-        setLoadingStage(prev => (prev < 2 ? prev + 1 : prev));
-      }, 3500); // move to next stage every 3.5 seconds
-    }
-    return () => clearInterval(interval);
-  }, [loading]);
-
-  const loadingStages = [
-    "Processing images and mapping floor plans...",
-    "Calculating spatial Vastu vectors...",
-    "Generating comprehensive AI report..."
-  ];
 
   const processFile = (file: File): Promise<ImageItem> => {
     return new Promise((resolve, reject) => {
@@ -75,12 +52,14 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
     setError('');
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+
     for (const file of files) {
       if (file.size > 10 * 1024 * 1024) {
         setError('Floor plan size should be less than 10MB');
         return;
       }
     }
+
     try {
       const newFloorPlans = await Promise.all(files.map(f => processFile(f)));
       setFloorPlans(prev => [...prev, ...newFloorPlans]);
@@ -93,37 +72,12 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
     setError('');
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+
     try {
       const newImages = await Promise.all(files.map(f => processFile(f)));
       setImages(prev => [...prev, ...newImages]);
     } catch (err) {
       setError('Failed to read one or more files');
-    }
-  };
-
-  const handleCameraCapture = (base64: string, mimeType: string) => {
-    if (retakeImageId) {
-      if (images.find(img => img.id === retakeImageId)) {
-        setImages(prev => prev.map(img => 
-          img.id === retakeImageId 
-            ? { id: retakeImageId, preview: `data:${mimeType};base64,${base64}`, base64, mimeType }
-            : img
-        ));
-      } else {
-        setFloorPlans(prev => prev.map(img => 
-          img.id === retakeImageId 
-            ? { id: retakeImageId, preview: `data:${mimeType};base64,${base64}`, base64, mimeType }
-            : img
-        ));
-      }
-      setRetakeImageId(null);
-    } else {
-      setImages(prev => [...prev, {
-        id: crypto.randomUUID(),
-        preview: `data:${mimeType};base64,${base64}`,
-        base64,
-        mimeType
-      }]);
     }
   };
 
@@ -141,6 +95,7 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
       setError('Please upload at least one floor plan or photo');
       return;
     }
+
     try {
       await onAnalyze(
         images.map(img => ({ data: img.base64, mimeType: img.mimeType })),
@@ -159,70 +114,18 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
 
   return (
     <div className="w-full">
-      {isCameraOpen && (
-        <LiveCamera 
-          onCapture={handleCameraCapture} 
-          onClose={() => { setIsCameraOpen(false); setRetakeImageId(null); }} 
-        />
-      )}
-      
-      {previewImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
-          <button 
-            onClick={() => setPreviewImage(null)}
-            className="absolute top-6 right-6 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          
-          <div className="max-w-4xl w-full flex flex-col items-center gap-6">
-            <img 
-              src={previewImage.preview} 
-              alt="Gallery Preview" 
-              className="max-h-[75vh] object-contain rounded-lg"
-            />
-            
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => {
-                  setRetakeImageId(previewImage.id);
-                  setPreviewImage(null);
-                  setIsCameraOpen(true);
-                }}
-                className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
-              >
-                <RefreshCw className="w-5 h-5" /> Retake Photo
-              </button>
-              <button
-                onClick={() => {
-                  if (images.find(img => img.id === previewImage.id)) {
-                    removeImage(previewImage.id);
-                  } else {
-                    removeFloorPlan(previewImage.id);
-                  }
-                  setPreviewImage(null);
-                }}
-                className="flex items-center gap-2 px-6 py-3 bg-red-500/20 hover:bg-red-500/40 text-red-100 rounded-xl font-medium transition-colors"
-              >
-                <X className="w-5 h-5" /> Remove
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <AIEngineUsage />
       <ConfidenceMeter 
         confidence={confidence} 
         onRefresh={onRefreshBaseline} 
         isRefreshing={isRefreshing} 
       />
       
-      <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden mt-8">
+      <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
         <div className="p-6 border-b border-stone-100 bg-stone-50">
           <h2 className="text-xl font-semibold text-stone-800">New Vastu Analysis</h2>
           <p className="text-sm text-stone-500 mt-1">Upload floor plans and multiple photos to get an AI-powered Vastu compliance report.</p>
         </div>
+
         <form onSubmit={handleSubmit} className="p-6 space-y-8">
           
           {/* Floor Plan Section */}
@@ -236,16 +139,11 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
               <div className="flex flex-wrap gap-4">
                 {floorPlans.map((fp) => (
                   <div key={fp.id} className="relative inline-block shrink-0">
-                    <div className="group relative w-32 h-32 rounded-xl border border-stone-200 overflow-hidden cursor-pointer" onClick={() => setPreviewImage(fp)}>
-                      <img src={fp.preview} alt="Floor plan preview" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                        <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
-                      </div>
-                    </div>
+                    <img src={fp.preview} alt="Floor plan preview" className="w-32 h-32 rounded-xl border border-stone-200 object-cover" />
                     <button 
                       type="button" 
                       onClick={() => removeFloorPlan(fp.id)}
-                      className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md border border-stone-200 hover:text-red-500 z-10"
+                      className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md border border-stone-200 hover:text-red-500"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -293,16 +191,11 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
             <div className="flex flex-wrap gap-4">
               {images.map((img) => (
                 <div key={img.id} className="relative inline-block shrink-0">
-                  <div className="group relative w-32 h-32 rounded-xl border border-stone-200 overflow-hidden cursor-pointer" onClick={() => setPreviewImage(img)}>
-                    <img src={img.preview} alt="Room preview" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                      <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
-                    </div>
-                  </div>
+                  <img src={img.preview} alt="Room preview" className="w-32 h-32 rounded-xl border border-stone-200 object-cover" />
                   <button 
                     type="button" 
                     onClick={() => removeImage(img.id)}
-                    className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md border border-stone-200 hover:text-red-500 z-10"
+                    className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md border border-stone-200 hover:text-red-500"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -312,7 +205,7 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
               <div className="flex flex-col gap-2 shrink-0">
                 <button 
                   type="button"
-                  onClick={() => setIsCameraOpen(true)}
+                  onClick={() => cameraInputRef.current?.click()}
                   className="w-32 h-[3.8rem] border border-stone-300 rounded-xl flex items-center justify-center gap-2 text-stone-600 hover:bg-stone-50 hover:border-amber-400 transition-colors text-sm font-medium"
                 >
                   <Camera className="w-4 h-4" /> Take
@@ -326,6 +219,7 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
                 </button>
               </div>
             </div>
+
             <input 
               type="file" 
               ref={photoInputRef} 
@@ -364,33 +258,27 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
             </div>
           )}
 
-          {loading ? (
-            <div className="w-full bg-amber-50 rounded-xl p-4 flex flex-col gap-3 border border-amber-200">
-              <div className="flex items-center justify-between text-sm font-bold text-amber-700">
-                <span className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-amber-600/30 border-t-amber-600 rounded-full animate-spin" />
-                  {loadingStages[loadingStage]}
-                </span>
-                <span>{Math.round(((loadingStage + 1) / 3) * 100)}%</span>
-              </div>
-              <div className="h-2 w-full bg-amber-200/50 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-amber-500 rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${((loadingStage + 1) / 3) * 100}%` }}
-                />
-              </div>
-            </div>
-          ) : (
-            <button
-              type="submit"
-              disabled={images.length === 0 && floorPlans.length === 0}
-              className="w-full py-4 bg-amber-600 hover:bg-amber-700 disabled:bg-stone-300 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-lg"
-            >
-              Analyze Complete House <ArrowRight className="w-5 h-5" />
-            </button>
-          )}
+          <button
+            type="submit"
+            disabled={loading || (images.length === 0 && floorPlans.length === 0)}
+            className="w-full py-4 bg-amber-600 hover:bg-amber-700 disabled:bg-stone-300 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-lg"
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Analyzing...
+              </span>
+            ) : (
+              <>
+                Analyze Complete House <ArrowRight className="w-5 h-5" />
+              </>
+            )}
+          </button>
         </form>
       </div>
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/VastuAnalyzer.tsx', content);
