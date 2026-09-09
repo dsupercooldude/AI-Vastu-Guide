@@ -1,4 +1,6 @@
+const fs = require('fs');
 
+const content = `
 import { CheckCircle2, Circle } from 'lucide-react';
 import { CHECKLIST_ITEMS } from '../hooks/useChecklist';
 
@@ -21,7 +23,7 @@ export function VastuChecklist({
         <div className="w-full h-2 bg-stone-200 rounded-full overflow-hidden">
           <div 
             className="h-full bg-amber-500 transition-all duration-500" 
-            style={{ width: `${progress}%` }} 
+            style={{ width: \`\${progress}%\` }} 
           />
         </div>
       </div>
@@ -37,7 +39,7 @@ export function VastuChecklist({
             ) : (
               <Circle className="w-5 h-5 text-stone-300 shrink-0 mt-0.5" />
             )}
-            <span className={`text-sm ${checkedItems.includes(item.id) ? 'text-stone-800' : 'text-stone-600'}`}>
+            <span className={\`text-sm \${checkedItems.includes(item.id) ? 'text-stone-800' : 'text-stone-600'}\`}>
               {item.text}
             </span>
           </button>
@@ -46,3 +48,6 @@ export function VastuChecklist({
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/VastuChecklist.tsx', content);

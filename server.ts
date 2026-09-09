@@ -9,6 +9,41 @@ dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const JSON_PROMPT_INSTRUCTION = `Task: Based on the provided floor plans and photos, calculate the cardinal directions. Map the provided photos to the floor plans if possible.
+Synthesize all observations into a comprehensive Vastu analysis.
+Identify defects and strictly provide practical remedies.
+
+
+Evaluate these 8 standard checklist items. If you are 100% absolutely certain that an item is compliant based ONLY on the provided images/plans, include its ID in the verifiedChecklistItems array. If you have even 1% doubt, or if there is not enough information to verify it, do NOT include its ID.
+1: Main entrance is located in North, East, or North-East.
+2: Master bedroom is in the South-West.
+3: Kitchen is in the South-East or North-West.
+4: Pooja room is in the North-East.
+5: No toilets are located in the North-East.
+6: Center of the house (Brahmasthan) is empty and clutter-free.
+7: Staircase is in the South, West, or South-West.
+8: Mirrors do not directly face the bed.
+
+
+You MUST respond with a pure JSON string (NO markdown backticks, NO \`\`\`json wrappers, JUST the raw JSON object) matching exactly this format:
+{
+  "score": <number 0-100>,
+  "zoneScores": [
+    { "zone": "North", "score": <number 0-100> },
+    { "zone": "North-East", "score": <number 0-100> },
+    { "zone": "East", "score": <number 0-100> },
+    { "zone": "South-East", "score": <number 0-100> },
+    { "zone": "South", "score": <number 0-100> },
+    { "zone": "South-West", "score": <number 0-100> },
+    { "zone": "West", "score": <number 0-100> },
+    { "zone": "North-West", "score": <number 0-100> },
+    { "zone": "Center", "score": <number 0-100> }
+  ],
+  "verifiedChecklistItems": [<array of numbers 1-8 for items you are 100% certain are compliant>],
+  "report": "<your full detailed markdown string including zone-by-zone breakdown, image references, and recommended remedies>"
+}`;
+
+
 const VASTU_SYSTEM_INSTRUCTION = `You are an expert in Vastu Shastra.
 Use the following principles from the provided Vastu Shastra document:
 
@@ -64,35 +99,35 @@ async function createServer() {
   constructor() {
     this.mutexes = {};
   }
-  async lock(model) {
+  async lock(model: string) {
     if (!this.mutexes[model]) {
       this.mutexes[model] = { locked: false, queue: [] };
     }
     return new Promise(resolve => {
       if (!this.mutexes[model].locked) {
         this.mutexes[model].locked = true;
-        resolve();
+        resolve(undefined);
       } else {
         this.mutexes[model].queue.push(resolve);
       }
     });
   }
-  unlock(model) {
+  unlock(model: string) {
     if (this.mutexes[model].queue.length > 0) {
       const resolve = this.mutexes[model].queue.shift();
-      resolve();
+      resolve(undefined);
     } else {
       this.mutexes[model].locked = false;
     }
   }
 }
 const modelMutexes = new ModelMutexes();
-const delay = (ms) => new Promise(res => setTimeout(res, ms));
+const delay = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 
-async function generateWithFallback(options, preferredModel = null) {
+async function generateWithFallback(options: any, preferredModel: string | null = null) {
   let lastError;
-  const MAX_RETRIES = 3;
-  let retryDelay = 2000;
+  const MAX_RETRIES = 6;
+  let retryDelay = 4000;
 
   let modelsToTry = [...FALLBACK_MODELS];
   if (preferredModel && modelsToTry.includes(preferredModel)) {
@@ -108,10 +143,16 @@ async function generateWithFallback(options, preferredModel = null) {
           model: model,
         });
         return { response, model };
-      } catch (error) {
+      } catch (error: any) {
         lastError = error;
-        console.error(`Error with model ${model}:`, error.message);
-        const errorMessage = error.message || '';
+        let errorString = '';
+        try { errorString = JSON.stringify(error); } catch(e) { errorString = String(error); }
+        const errorMessage = (error.message || '') + ' ' + errorString;
+        if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('404') || errorMessage.includes('400') || errorMessage.includes('not found') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE') || errorMessage.includes('500') || errorMessage.includes('high demand') || errorMessage.includes('temporarily overloaded')) {
+          console.warn(`Model ${model} is currently overloaded or rate-limited. Trying fallback...`);
+        } else {
+          console.error(`Error with model ${model}:`, error.message);
+        }
         if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('404') || errorMessage.includes('400') || errorMessage.includes('not found') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE') || errorMessage.includes('500') || errorMessage.includes('high demand') || errorMessage.includes('temporarily overloaded')) {
           continue; 
         }
@@ -141,7 +182,7 @@ const aiQuota = {
   ]
 };
 
-function incrementQuota(modelName) {
+function incrementQuota(modelName: string) {
   const engine = aiQuota.engines.find(e => e.name.toLowerCase().replace(/ /g, '-') === modelName.replace('models/', ''));
   if (engine) engine.used++;
 }
@@ -156,12 +197,12 @@ app.get('/api/quota', (req, res) => {
     try {
       const { images, floorPlans, description, houseName } = req.body;
       
-      const allVisuals = [];
+      const allVisuals: any[] = [];
       if (floorPlans) {
-        floorPlans.forEach((fp, i) => allVisuals.push({ type: 'Floor Plan', idx: i+1, data: fp.data, mimeType: fp.mimeType }));
+        floorPlans.forEach((fp: any, i: number) => allVisuals.push({ type: 'Floor Plan', idx: i+1, data: fp.data, mimeType: fp.mimeType }));
       }
       if (images) {
-        images.forEach((img, i) => allVisuals.push({ type: 'Photo', idx: i+1, data: img.data, mimeType: img.mimeType }));
+        images.forEach((img: any, i: number) => allVisuals.push({ type: 'Photo', idx: i+1, data: img.data, mimeType: img.mimeType }));
       }
       
       const MAX_IMAGES_PER_REQUEST = 8;
@@ -170,11 +211,7 @@ app.get('/api/quota', (req, res) => {
         const parts = [];
         let promptText = `Analyze this house: ${houseName || 'Unknown'}
 `;
-        if (description) promptText += `User Description: ${description}
-`;
-        
-        promptText += `
-Task: If floor plans are provided (there may be multiple for different floors), calculate the cardinal directions and spatial layout from them. Map the provided room/angle photos to the floor plans. Then, calculate the overall Vastu compliance for the entire house or the provided scenario based on the rules. Detail the compliance, reasons, and fixes.`;
+        if (description) promptText += '\n' + JSON_PROMPT_INSTRUCTION;
         
         parts.push({ text: promptText });
         
@@ -195,10 +232,22 @@ Task: If floor plans are provided (there may be multiple for different floors), 
         
         incrementQuota(model);
 
-        const match = response.text.match(/SCORE:\s*(\d+)/i);
-        const score = match ? parseInt(match[1]) : 50;
-
-        res.json({ result: response.text, score });
+                        let jsonResponse;
+        try {
+           let cleanedText = (response.text || "").replace(/\x60\x60\x60json/gi, '').replace(/\x60\x60\x60/g, '').trim();
+           const firstBrace = cleanedText.indexOf('{');
+           const lastBrace = cleanedText.lastIndexOf('}');
+           if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
+               cleanedText = cleanedText.substring(firstBrace, lastBrace + 1);
+           }
+           jsonResponse = JSON.parse(cleanedText);
+        } catch (e: any) {
+           console.error("Failed to parse JSON", e);
+           const match = (response.text || "").match(/SCORE:\s*(\d+)/i);
+           const score = match ? parseInt(match[1]) : 50;
+           jsonResponse = { score, report: (response.text || ""), zoneScores: [], verifiedChecklistItems: [] };
+        }
+        res.json({ result: jsonResponse.report, score: jsonResponse.score, zoneScores: jsonResponse.zoneScores, verifiedChecklistItems: jsonResponse.verifiedChecklistItems || [] });
       } else {
         console.log(`Processing ${allVisuals.length} images in parallel batches...`);
         const chunks = [];
@@ -233,7 +282,7 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
         const batchResults = await Promise.all(chunkPromises);
         
         const finalParts = [];
-        finalParts.push({ text: `Analyze this house: ${houseName || 'Unknown'}\nUser Description: ${description}\n\nTask: We had to process the images in batches. Below are the detailed Vastu observations extracted from all batches of photos and floor plans. Synthesize these observations and calculate the overall Vastu compliance for the entire house. Detail the compliance, reasons, and fixes.\n\n${batchResults.join('\n\n')}\n\nCalculate the final SCORE at the very end in format SCORE: [number].` });
+        finalParts.push({ text: `Analyze this house: ${houseName || 'Unknown'}\nUser Description: ${description}\n\nTask: We had to process the images in batches. Below are the detailed Vastu observations extracted from all batches of photos and floor plans.\n\n${batchResults.join('\n\n')}\n\n${JSON_PROMPT_INSTRUCTION}` });
         
         const { response: finalResponse, model: finalModel } = await generateWithFallback({
           contents: [{ role: 'user', parts: finalParts }],
@@ -246,12 +295,24 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
         
         incrementQuota(finalModel);
         
-        const match = finalResponse.text.match(/SCORE:\s*(\d+)/i);
-        const score = match ? parseInt(match[1]) : 50;
-
-        res.json({ result: finalResponse.text, score });
+                        let jsonResponse;
+        try {
+           let cleanedText = (finalResponse.text || "").replace(/\x60\x60\x60json/gi, '').replace(/\x60\x60\x60/g, '').trim();
+           const firstBrace = cleanedText.indexOf('{');
+           const lastBrace = cleanedText.lastIndexOf('}');
+           if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
+               cleanedText = cleanedText.substring(firstBrace, lastBrace + 1);
+           }
+           jsonResponse = JSON.parse(cleanedText);
+        } catch (e: any) {
+           console.error("Failed to parse JSON", e);
+           const match = (finalResponse.text || "").match(/SCORE:\s*(\d+)/i);
+           const score = match ? parseInt(match[1]) : 50;
+           jsonResponse = { score, report: (finalResponse.text || ""), zoneScores: [], verifiedChecklistItems: [] };
+        }
+        res.json({ result: jsonResponse.report, score: jsonResponse.score, zoneScores: jsonResponse.zoneScores, verifiedChecklistItems: jsonResponse.verifiedChecklistItems || [] });
       }
-    } catch (error) {
+    } catch (error: any) {
       const errorMessage = error.message || 'Failed to analyze';
       if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('404') || errorMessage.includes('400') || errorMessage.includes('not found') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE') || errorMessage.includes('500') || errorMessage.includes('high demand') || errorMessage.includes('temporarily overloaded')) {
         res.status(429).json({ error: 'AI Quota Exceeded. Please wait a moment and try again.' });
@@ -267,7 +328,7 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
       const { messages } = req.body;
       
       // Map frontend messages to Gemini format
-      const formattedMessages = messages.map((m) => ({
+      const formattedMessages = messages.map((m: any) => ({
         role: m.role === 'user' ? 'user' : 'model',
         parts: [{ text: m.content }]
       }));
@@ -287,10 +348,10 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
       const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
 
       res.json({ 
-        result: response.text,
+        result: response.text || "",
         groundingMetadata 
       });
-    } catch (error) {
+    } catch (error: any) {
       const errorMessage = error.message || 'Failed to generate response';
       if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('404') || errorMessage.includes('400') || errorMessage.includes('not found') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE') || errorMessage.includes('500') || errorMessage.includes('high demand') || errorMessage.includes('temporarily overloaded')) {
         res.status(429).json({ error: 'AI Quota Exceeded. Please wait a moment and try again.' });
@@ -316,7 +377,7 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
       });
       console.log(`Successfully generated baseline with ${model}`);
       res.json({ success: true, result: response.text });
-    } catch (error) {
+    } catch (error: any) {
       const errorMessage = error.message || 'Failed to refresh baseline';
       if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('404') || errorMessage.includes('400') || errorMessage.includes('not found') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE') || errorMessage.includes('500') || errorMessage.includes('high demand') || errorMessage.includes('temporarily overloaded')) {
         res.status(429).json({ error: 'AI Quota Exceeded. Please wait a moment and try again.' });

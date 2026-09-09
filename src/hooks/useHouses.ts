@@ -1,34 +1,37 @@
 import { useState, useEffect } from 'react';
 import { House } from '../types';
+import { get, set, del } from 'idb-keyval';
 
 export function useHouses(profileId: string | null) {
   const [houses, setHouses] = useState<House[]>([]);
   const [currentHouseId, setCurrentHouseId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!profileId) {
-      setHouses([]);
-      setCurrentHouseId(null);
-      return;
-    }
-    const saved = localStorage.getItem(`vastu_houses_\${profileId}`);
-    if (saved) {
+    const load = async () => {
+      if (!profileId) {
+        setHouses([]);
+        setCurrentHouseId(null);
+        return;
+      }
       try {
-        const parsed = JSON.parse(saved);
-        setHouses(parsed);
-        if (parsed.length > 0) {
-          setCurrentHouseId(parsed[0].id);
+        const saved = await get(`vastu_houses_${profileId}`);
+        if (saved && Array.isArray(saved)) {
+          setHouses(saved);
+          if (saved.length > 0) {
+            setCurrentHouseId(saved[0].id);
+          }
+        } else {
+          setHouses([]);
+          setCurrentHouseId(null);
         }
       } catch (e) {
         console.error('Failed to parse houses', e);
       }
-    } else {
-      setHouses([]);
-      setCurrentHouseId(null);
-    }
+    };
+    load();
   }, [profileId]);
 
-  const addHouse = (name: string) => {
+  const addHouse = async (name: string) => {
     if (!profileId) return;
     const newHouse: House = {
       id: crypto.randomUUID(),
@@ -38,23 +41,24 @@ export function useHouses(profileId: string | null) {
     };
     const updated = [...houses, newHouse];
     setHouses(updated);
-    localStorage.setItem(`vastu_houses_\${profileId}`, JSON.stringify(updated));
     setCurrentHouseId(newHouse.id);
+    await set(`vastu_houses_${profileId}`, updated);
   };
 
   const switchHouse = (id: string) => {
     setCurrentHouseId(id);
   };
 
-  const deleteHouse = (id: string) => {
+  const deleteHouse = async (id: string) => {
     if (!profileId) return;
     const updated = houses.filter(h => h.id !== id);
     setHouses(updated);
-    localStorage.setItem(`vastu_houses_\${profileId}`, JSON.stringify(updated));
-    localStorage.removeItem(`vastu_analysis_house_\${id}`);
     if (currentHouseId === id) {
       setCurrentHouseId(updated.length > 0 ? updated[0].id : null);
     }
+    
+    await set(`vastu_houses_${profileId}`, updated);
+    await del(`vastu_analysis_house_${id}`);
   };
 
   return {

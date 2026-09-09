@@ -4,11 +4,14 @@ import { useHouses } from './hooks/useHouses';
 import { useChatHistory } from './hooks/useChatHistory';
 import { useAnalysisHistory } from './hooks/useAnalysisHistory';
 import { useEngineState } from './hooks/useEngineState';
+import { useChecklist } from './hooks/useChecklist';
 import { ProfileSelector } from './components/ProfileSelector';
 import { HouseSelector } from './components/HouseSelector';
 import { VastuAnalyzer } from './components/VastuAnalyzer';
 import { VastuChecklist } from './components/VastuChecklist';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { ImageOverlayModal } from './components/ImageOverlayModal';
+import { PWAInstallButton } from './components/PWAInstallButton';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AIChat } from './components/AIChat';
 import Markdown from 'react-markdown';
 import { Home, History, MessageSquare, Plus, AlignLeft, RefreshCw, Clock, Lock, Download } from 'lucide-react';
@@ -23,6 +26,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const [minScore, setMinScore] = useState(0);
+  const [previewImageSrc, setPreviewImageSrc] = useState<string | null>(null);
+  const { checkedItems, toggleCheck, setVerified } = useChecklist(currentHouseId);
   const { confidence, lastUpdated, isRefreshing, refreshBaseline, setConfidence } = useEngineState();
 
   const [activeTab, setActiveTab] = useState<'analyzer' | 'chat' | 'history'>('analyzer');
@@ -59,6 +64,9 @@ export default function App() {
   const handleAnalyzeWrapper = async (images: {data:string, mimeType:string}[], floorPlans: {data:string, mimeType:string}[], desc: string, houseName: string) => {
     const result = await analyzeHouse(images, floorPlans, desc, houseName);
     setConfidence(prev => Math.min(99, prev + 1));
+    if (result && result.verifiedChecklistItems) {
+      setVerified(result.verifiedChecklistItems);
+    }
     return result;
   };
 
@@ -125,9 +133,16 @@ export default function App() {
   }
 
   return (
+    <>
+      {previewImageSrc && (
+        <ImageOverlayModal
+          src={previewImageSrc}
+          onClose={() => setPreviewImageSrc(null)}
+        />
+      )}
     <div className="min-h-screen bg-stone-100 flex flex-col md:flex-row">
       {/* Sidebar */}
-      <div className={`\${mobileMenuOpen ? 'fixed inset-0 z-50 flex' : 'hidden'} md:flex md:w-80 flex-col bg-stone-900 text-stone-300 transition-all`}>
+      <div className={`\${mobileMenuOpen ? 'fixed inset-0 z-[100] flex' : 'hidden'} md:flex md:w-80 flex-col bg-stone-900 text-stone-300 transition-all`}>
         {mobileMenuOpen && (
           <div className="fixed inset-0 bg-black/50 md:hidden" onClick={() => setMobileMenuOpen(false)} />
         )}
@@ -179,6 +194,10 @@ export default function App() {
             </button>
           </nav>
 
+          <div className="mt-4 flex justify-center">
+            <PWAInstallButton />
+          </div>
+
           
           <div className="mt-8 mb-6 bg-stone-800/50 rounded-xl p-4 border border-stone-800">
             <h4 className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">AI Engine Load Balancer</h4>
@@ -219,7 +238,7 @@ export default function App() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Mobile Header */}
-        <div className="md:hidden bg-white px-4 py-3 border-b border-stone-200 flex items-center justify-between shadow-sm z-40">
+        <div className="md:hidden bg-white px-4 py-3 border-b border-stone-200 flex items-center justify-between shadow-sm relative z-40">
           <div className="flex items-center gap-2 text-amber-600 font-bold">
             <Home className="w-5 h-5" />
             Vastu AI
@@ -260,7 +279,7 @@ export default function App() {
                 />
                   </div>
                   <div>
-                    <VastuChecklist houseId={currentHouseId} />
+                    <VastuChecklist checkedItems={checkedItems} onToggle={toggleCheck} />
                   </div>
                 </div>
 
@@ -270,9 +289,43 @@ export default function App() {
                       <h3 className="text-lg font-bold text-stone-800">Latest Analysis Report</h3>
                       <button onClick={() => exportToPDF('latest-report', `Vastu_Report_${currentHouse?.name}.pdf`)} className="flex items-center gap-2 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg text-sm font-medium transition-colors"><Download className="w-4 h-4"/> Export PDF</button>
                     </div>
+                    
                     <div id="latest-report" className="prose prose-stone max-w-none bg-white p-4 rounded-xl">
+                      {history[0].zoneScores && history[0].zoneScores.length > 0 && (
+                        <div className="mb-8">
+                          <h4 className="text-sm font-bold text-stone-800 uppercase tracking-wide mb-4">Zone Compliance Breakdown</h4>
+                          <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={history[0].zoneScores.map(z => ({ name: z.zone, score: z.score }))}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
+                                <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
+                                <Tooltip cursor={{fill: '#f5f5f4'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                <Bar dataKey="score" fill="#d97706" radius={[4, 4, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {history[0].floorPlans && history[0].floorPlans.map((fp, i) => (
+                          <div key={'fp-'+i} className="relative aspect-square rounded-lg overflow-hidden border border-stone-200">
+                            <img src={fp} alt="Floor Plan" className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(fp)} />
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 font-medium">Floor Plan {i+1}</div>
+                          </div>
+                        ))}
+                        {history[0].images && history[0].images.map((img, i) => (
+                          <div key={'img-'+i} className="relative aspect-square rounded-lg overflow-hidden border border-stone-200">
+                            <img src={img} alt="Property Image" className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(img)} />
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 font-medium">Photo {i+1}</div>
+                          </div>
+                        ))}
+                      </div>
+
                       <Markdown>{history[0].report}</Markdown>
                     </div>
+
                   </div>
                 )}
               </motion.div>
@@ -312,10 +365,16 @@ export default function App() {
             {activeTab === 'history' && (() => {
               // Filter logic
               const filteredHistory = allHistory.filter(item => {
-                // House name match
-                const hName = item.houseName?.toLowerCase() || '';
+                // Global match
                 const q = searchQuery.toLowerCase();
-                if (q && !hName.includes(q)) return false;
+                if (q) {
+                  const hName = item.houseName?.toLowerCase() || '';
+                  const desc = item.description?.toLowerCase() || '';
+                  const rep = item.report?.toLowerCase() || '';
+                  if (!hName.includes(q) && !desc.includes(q) && !rep.includes(q)) {
+                    return false;
+                  }
+                }
 
                 // Score threshold
                 if (item.score !== undefined && item.score < minScore) return false;
@@ -351,10 +410,10 @@ export default function App() {
 
                   <div className="mb-8 bg-white p-4 rounded-2xl shadow-sm border border-stone-200 flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1 w-full">
-                      <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1">House Name</label>
+                      <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1">Search Keywords</label>
                       <input 
                         type="text" 
-                        placeholder="Search by name..." 
+                        placeholder="Search history..." 
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-amber-500"
@@ -427,12 +486,12 @@ export default function App() {
                               </>
                             )}
                             {item.floorPlans && item.floorPlans.length > 0 && (
-                              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">{item.floorPlans.map((fp, i) => (<img key={`fp-${i}`} src={fp} alt={`Floor Plan ${i}`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200" />))}</div>
+                              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">{item.floorPlans.map((fp, i) => (<img key={`fp-${i}`} src={fp} alt={`Floor Plan ${i}`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(fp)} />))}</div>
                             )}
                             {item.images && item.images.length > 0 && (
                               <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
                                 {item.images.map((img, i) => (
-                                  <img key={i} src={img} alt={`Room ${i}`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200" />
+                                  <img key={i} src={img} alt={`Room ${i}`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(img)} />
                                 ))}
                               </div>
                             )}
@@ -463,5 +522,6 @@ export default function App() {
       </div>
     </div>
     </div>
+    </>
   );
 }

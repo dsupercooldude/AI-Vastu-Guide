@@ -1,82 +1,53 @@
 const fs = require('fs');
 let content = fs.readFileSync('src/App.tsx', 'utf8');
 
-// Replace standard div with motion.div for analyzer (with house)
 content = content.replace(
-  /{activeTab === 'analyzer' && currentHouseId && \(\s*<div className="animate-in fade-in slide-in-from-bottom-4 duration-500">/,
-  `{activeTab === 'analyzer' && currentHouseId && (\n              <motion.div \n                key="analyzer"\n                initial={{ opacity: 0, y: 10 }}\n                animate={{ opacity: 1, y: 0 }}\n                exit={{ opacity: 0, y: -10 }}\n                transition={{ duration: 0.2 }}\n              >`
+  /import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';/,
+  "import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';"
 );
 
-// Replace standard div with motion.div for analyzer (without house)
-content = content.replace(
-  /{activeTab === 'analyzer' && !currentHouseId && \(\s*<div className="text-center py-12 bg-white rounded-2xl border border-stone-200">/,
-  `{activeTab === 'analyzer' && !currentHouseId && (\n              <motion.div \n                key="analyzer-empty"\n                initial={{ opacity: 0, y: 10 }}\n                animate={{ opacity: 1, y: 0 }}\n                exit={{ opacity: 0, y: -10 }}\n                transition={{ duration: 0.2 }}\n                className="text-center py-12 bg-white rounded-2xl border border-stone-200"\n              >`
-);
+// We need to inject the BarChart UI into the latest report section.
+const latestReportUI = `
+                    <div id="latest-report" className="prose prose-stone max-w-none bg-white p-4 rounded-xl">
+                      {history[0].zoneScores && history[0].zoneScores.length > 0 && (
+                        <div className="mb-8">
+                          <h4 className="text-sm font-bold text-stone-800 uppercase tracking-wide mb-4">Zone Compliance Breakdown</h4>
+                          <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={history[0].zoneScores.map(z => ({ name: z.zone, score: z.score }))}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
+                                <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
+                                <Tooltip cursor={{fill: '#f5f5f4'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                <Bar dataKey="score" fill="#d97706" radius={[4, 4, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {history[0].floorPlans && history[0].floorPlans.map((fp, i) => (
+                          <div key={'fp-'+i} className="relative aspect-square rounded-lg overflow-hidden border border-stone-200">
+                            <img src={fp} alt="Floor Plan" className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(fp)} />
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 font-medium">Floor Plan {i+1}</div>
+                          </div>
+                        ))}
+                        {history[0].images && history[0].images.map((img, i) => (
+                          <div key={'img-'+i} className="relative aspect-square rounded-lg overflow-hidden border border-stone-200">
+                            <img src={img} alt="Property Image" className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(img)} />
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 font-medium">Photo {i+1}</div>
+                          </div>
+                        ))}
+                      </div>
 
-// Replace standard div with motion.div for chat
-content = content.replace(
-  /{activeTab === 'chat' && \(\s*<div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full max-w-3xl mx-auto">/,
-  `{activeTab === 'chat' && (\n              <motion.div \n                key="chat"\n                initial={{ opacity: 0, y: 10 }}\n                animate={{ opacity: 1, y: 0 }}\n                exit={{ opacity: 0, y: -10 }}\n                transition={{ duration: 0.2 }}\n                className="h-full max-w-3xl mx-auto"\n              >`
-);
-
-// Replace standard div with motion.div for history
-content = content.replace(
-  /<div className="animate-in fade-in slide-in-from-bottom-4 duration-500">/,
-  `<motion.div \n                  key="history"\n                  initial={{ opacity: 0, y: 10 }}\n                  animate={{ opacity: 1, y: 0 }}\n                  exit={{ opacity: 0, y: -10 }}\n                  transition={{ duration: 0.2 }}\n                >`
-);
-
-// Close motion divs (this is tricky, so I'll just change the enclosing element of `activeTab` rendering blocks)
-// I will wrap the entire activeTab block inside AnimatePresence
-content = content.replace(
-  /<div className="max-w-4xl mx-auto">\s*{activeTab === 'analyzer'/g,
-  '<div className="max-w-4xl mx-auto">\n            <AnimatePresence mode="wait">\n            {activeTab === \'analyzer\''
-);
-
-// Replace the end of the history block correctly to close the motion div
-content = content.replace(
-  /}\(\)\)}\s*<\/div>\s*<\/main>/,
-  '}(())}\n            </AnimatePresence>\n          </div>\n        </main>'
-);
-
-// Add PDF Export button for the Latest Analysis Report in the Analyzer view
-content = content.replace(
-  /<h3 className="text-lg font-bold text-stone-800 mb-4">Latest Analysis Report<\/h3>/,
-  `<div className="flex justify-between items-center mb-4">\n                      <h3 className="text-lg font-bold text-stone-800">Latest Analysis Report</h3>\n                      <button onClick={() => exportToPDF('latest-report', \`Vastu_Report_\${currentHouse?.name}.pdf\`)} className="flex items-center gap-2 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg text-sm font-medium transition-colors"><Download className="w-4 h-4"/> Export PDF</button>\n                    </div>`
-);
-content = content.replace(
-  /<div className="prose prose-stone max-w-none">\s*<Markdown>{history\[0\]\.report}<\/Markdown>\s*<\/div>/,
-  `<div id="latest-report" className="prose prose-stone max-w-none bg-white p-4 rounded-xl">\n                      <Markdown>{history[0].report}</Markdown>\n                    </div>`
-);
-
-// Add PDF Export button for History items
-content = content.replace(
-  /<h4 className="font-bold text-stone-800 mb-1">{item\.houseName}<\/h4>/g,
-  `<h4 className="font-bold text-stone-800 mb-1">{item.houseName}</h4>\n                            <button onClick={() => exportToPDF(\`report-\${item.id}\`, \`Vastu_Report_\${item.houseName}_\${new Date(item.timestamp).getTime()}.pdf\`)} className="flex items-center justify-center gap-2 px-2 py-1 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded text-xs font-medium transition-colors mt-1 w-fit"><Download className="w-3 h-3"/> PDF</button>`
-);
-content = content.replace(
-  /<div className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar">/g,
-  `<div id={\`report-\${item.id}\`} className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar bg-white p-2">`
-);
-
-// Now let's handle closing tags for motion.div which replaced div
-content = content.replace(
-  /<\/div>\s*\)\}\s*{activeTab === 'analyzer' && !currentHouseId/g,
-  '</motion.div>\n            )}\n            \n            {activeTab === \'analyzer\' && !currentHouseId'
-);
+                      <Markdown>{history[0].report}</Markdown>
+                    </div>
+`;
 
 content = content.replace(
-  /<\/div>\s*\)\}\s*{activeTab === 'chat'/g,
-  '</motion.div>\n            )}\n\n            {activeTab === \'chat\''
-);
-
-content = content.replace(
-  /<\/div>\s*\)\}\s*{activeTab === 'history'/g,
-  '</motion.div>\n            )}\n\n            {activeTab === \'history\''
-);
-
-content = content.replace(
-  /<\/div>\s*\);\s*}\)\(\)}/g,
-  '</motion.div>\n              );\n            })()}'
+  /<div id="latest-report" className="prose prose-stone max-w-none bg-white p-4 rounded-xl">.*?<\/Markdown>\s*<\/div>/s,
+  latestReportUI
 );
 
 fs.writeFileSync('src/App.tsx', content);

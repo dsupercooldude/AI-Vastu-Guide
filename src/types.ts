@@ -16,6 +16,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  verifiedChecklistItems?: number[];
   sources?: { title: string; uri: string }[];
 }
 
@@ -27,6 +28,8 @@ export interface AnalysisHistory {
   description: string;
   report: string;
   score?: number;
+  zoneScores?: { zone: string; score: number }[];
   houseName?: string;
   timestamp: number;
+  verifiedChecklistItems?: number[];
 }

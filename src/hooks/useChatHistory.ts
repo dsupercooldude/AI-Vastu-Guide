@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { get, set } from 'idb-keyval';
 import { ChatMessage } from '../types';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -8,39 +9,43 @@ export function useChatHistory(profileId: string | null) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!profileId) {
-      setMessages([]);
-      return;
-    }
-
-    const saved = localStorage.getItem(`vastu_chat_\${profileId}`);
-    if (saved) {
+    const load = async () => {
+      if (!profileId) {
+        setMessages([]);
+        return;
+      }
       try {
-        const parsed: ChatMessage[] = JSON.parse(saved);
-        const now = Date.now();
-        // Filter messages older than 7 days
-        const filtered = parsed.filter(m => now - m.timestamp < SEVEN_DAYS_MS);
-        setMessages(filtered);
-        if (parsed.length !== filtered.length) {
-          localStorage.setItem(`vastu_chat_\${profileId}`, JSON.stringify(filtered));
+        const saved = await get(`vastu_chat_${profileId}`);
+        if (saved && Array.isArray(saved)) {
+          const now = Date.now();
+          const filtered = saved.filter(m => now - m.timestamp < SEVEN_DAYS_MS);
+          setMessages(filtered);
+          if (saved.length !== filtered.length) {
+            await set(`vastu_chat_${profileId}`, filtered);
+          }
+        } else {
+          setMessages([{
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: 'Hello! I am your Vastu Shastra expert. How can I help you today?',
+            timestamp: Date.now()
+          }]);
         }
       } catch (e) {
-        console.error('Failed to parse chat', e);
+        console.error('Failed to load chat from indexedDB', e);
       }
-    } else {
-      setMessages([{
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: 'Hello! I am your Vastu Shastra expert. How can I help you today?',
-        timestamp: Date.now()
-      }]);
-    }
+    };
+    load();
   }, [profileId]);
 
-  const saveMessages = (newMessages: ChatMessage[]) => {
+  const saveMessages = async (newMessages: ChatMessage[]) => {
     setMessages(newMessages);
     if (profileId) {
-      localStorage.setItem(`vastu_chat_\${profileId}`, JSON.stringify(newMessages));
+      try {
+        await set(`vastu_chat_${profileId}`, newMessages);
+      } catch (e) {
+        console.error('Failed to save chat to indexedDB', e);
+      }
     }
   };
 
@@ -55,7 +60,7 @@ export function useChatHistory(profileId: string | null) {
     };
 
     const updatedWithUser = [...messages, userMsg];
-    saveMessages(updatedWithUser);
+    await saveMessages(updatedWithUser);
     setLoading(true);
 
     try {
@@ -73,8 +78,7 @@ export function useChatHistory(profileId: string | null) {
         sources = data.groundingMetadata.groundingChunks
           .map((chunk: any) => chunk.web?.uri ? { title: chunk.web.title, uri: chunk.web.uri } : null)
           .filter(Boolean);
-        
-        // Deduplicate sources
+          
         if (sources) {
           const uniqueUris = new Set();
           sources = sources.filter((s: any) => {
@@ -93,7 +97,7 @@ export function useChatHistory(profileId: string | null) {
         sources: sources?.length ? sources : undefined
       };
       
-      saveMessages([...updatedWithUser, aiMsg]);
+      await saveMessages([...updatedWithUser, aiMsg]);
     } catch (e: any) {
       console.error(e);
       const errorMsg: ChatMessage = {
@@ -102,7 +106,7 @@ export function useChatHistory(profileId: string | null) {
         content: 'Sorry, I encountered an error communicating with the expert.',
         timestamp: Date.now()
       };
-      saveMessages([...updatedWithUser, errorMsg]);
+      await saveMessages([...updatedWithUser, errorMsg]);
     } finally {
       setLoading(false);
     }

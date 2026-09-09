@@ -97,7 +97,8 @@ export function useAnalysisHistory(houseId: string | null) {
         report: data.result,
         score: data.score,
         houseName: houseName,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        verifiedChecklistItems: data.verifiedChecklistItems
       };
       
       saveHistory([newAnalysis, ...history]);

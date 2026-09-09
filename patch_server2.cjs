@@ -2,8 +2,8 @@ const fs = require('fs');
 let content = fs.readFileSync('server.ts', 'utf8');
 
 content = content.replace(
-  /console\.log\(\`Model \$\{model\} failed with \$\{errorMessage\.substring\(0, 50\)\}\.\.\. falling back to next\.\`\);/g,
-  `// silent fallback`
+  /promptText \+\= \`Task: If floor plans are provided.*?fixes\.\`;/s,
+  `promptText += JSON_PROMPT_INSTRUCTION;`
 );
 
 fs.writeFileSync('server.ts', content);

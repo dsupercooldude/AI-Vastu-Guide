@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { APIProvider, Map, AdvancedMarker, Pin, MapControl, ControlPosition } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, Pin, MapControl, ControlPosition, useMap } from '@vis.gl/react-google-maps';
 import { Compass } from 'lucide-react';
 import { MapSearch } from './MapSearch';
 
 interface VastuMapProps {
   onLocationSelect?: (lat: number, lng: number) => void;
+}
+
+
+function MapUpdater({ position }: { position: { lat: number, lng: number } }) {
+  const map = useMap();
+  useEffect(() => {
+    if (map) {
+      map.panTo(position);
+    }
+  }, [position, map]);
+  return null;
 }
 
 export function VastuMap({ onLocationSelect }: VastuMapProps) {
@@ -23,6 +34,25 @@ export function VastuMap({ onLocationSelect }: VastuMapProps) {
     );
   }
 
+  
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setPosition({ lat, lng });
+          if (onLocationSelect) {
+            onLocationSelect(lat, lng);
+          }
+        },
+        (err) => {
+          console.error("Geolocation error:", err);
+        }
+      );
+    }
+  }, []);
+
   const handleMapClick = (e: any) => {
     if (e.detail.latLng) {
       handleLocationUpdate(e.detail.latLng.lat, e.detail.latLng.lng);
@@ -36,7 +66,7 @@ export function VastuMap({ onLocationSelect }: VastuMapProps) {
 
   return (
     <div className="w-full rounded-2xl overflow-hidden border border-stone-200 shadow-sm relative" style={{ height: '400px' }}>
-      <APIProvider apiKey={apiKey}>
+      <APIProvider apiKey={apiKey} libraries={['places']}>
         <Map
           defaultZoom={15}
           defaultCenter={position}
@@ -52,6 +82,7 @@ export function VastuMap({ onLocationSelect }: VastuMapProps) {
             </div>
           </MapControl>
           
+          <MapUpdater position={position} />
           <AdvancedMarker position={position}>
             <div className="relative flex items-center justify-center">
               {/* Compass overlay around the pin */}

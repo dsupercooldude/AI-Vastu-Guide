@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, AlertCircle, ArrowRight, X, LayoutTemplate, Plus, Maximize2, RefreshCw, MapPin } from 'lucide-react';
+import { Camera, Upload, AlertCircle, ArrowRight, X, LayoutTemplate, Plus, Maximize2, RefreshCw, MapPin, Trash2 } from 'lucide-react';
 import { ConfidenceMeter } from './ConfidenceMeter';
 import { LiveCamera } from './LiveCamera';
 import { AIEngineUsage } from './AIEngineUsage';
 import { VastuMap } from './VastuMap';
+import { Compass } from './Compass';
+import { ImageOverlayModal } from './ImageOverlayModal';
 
 interface VastuAnalyzerProps {
   onAnalyze: (images: {data: string, mimeType: string}[], floorPlans: {data: string, mimeType: string}[], description: string, houseName: string) => Promise<any>;
@@ -170,22 +172,11 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
       )}
       
       {previewImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
-          <button 
-            onClick={() => setPreviewImage(null)}
-            className="absolute top-6 right-6 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          
-          <div className="max-w-4xl w-full flex flex-col items-center gap-6">
-            <img 
-              src={previewImage.preview} 
-              alt="Gallery Preview" 
-              className="max-h-[75vh] object-contain rounded-lg"
-            />
-            
-            <div className="flex items-center gap-4">
+        <ImageOverlayModal
+          src={previewImage.preview}
+          onClose={() => setPreviewImage(null)}
+          actions={
+            <>
               <button
                 onClick={() => {
                   setRetakeImageId(previewImage.id);
@@ -197,6 +188,7 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
                 <RefreshCw className="w-5 h-5" /> Retake Photo
               </button>
               <button
+                type="button"
                 onClick={() => {
                   if (images.find(img => img.id === previewImage.id)) {
                     removeImage(previewImage.id);
@@ -207,11 +199,18 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
                 }}
                 className="flex items-center gap-2 px-6 py-3 bg-red-500/20 hover:bg-red-500/40 text-red-100 rounded-xl font-medium transition-colors"
               >
-                <X className="w-5 h-5" /> Remove
+                <Trash2 className="w-5 h-5" /> Remove
               </button>
-            </div>
-          </div>
-        </div>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="flex items-center gap-2 px-6 py-3 bg-stone-500/20 hover:bg-stone-500/40 text-stone-100 rounded-xl font-medium transition-colors"
+              >
+                <X className="w-5 h-5" /> Close
+              </button>
+            </>
+          }
+        />
       )}
 
       <AIEngineUsage />
@@ -304,6 +303,9 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
               <Camera className="w-5 h-5 text-amber-600" />
               3. Room / Angle Photos
             </h3>
+            <div className="my-4">
+              <Compass />
+            </div>
             
             <div className="flex flex-wrap gap-4">
               {images.map((img) => (

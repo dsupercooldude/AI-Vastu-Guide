@@ -1,11 +1,26 @@
 const fs = require('fs');
-let content = fs.readFileSync('server.ts', 'utf8');
 
-content = content.replace(/tools:\s*\[\{\s*googleSearch:\s*\{\}\s*\}\]/g, '/* removed googleSearch */');
+let content = fs.readFileSync('src/App.tsx', 'utf8');
 
+// Replace filter logic
 content = content.replace(
-  "const FALLBACK_MODELS = ['gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-3.5-flash-lite', 'gemini-flash-latest'];",
-  "const FALLBACK_MODELS = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];"
+  /\/\/ House name match\s*const hName = item\.houseName\?\.toLowerCase\(\) \|\| '';\s*const q = searchQuery\.toLowerCase\(\);\s*if \(q && !hName\.includes\(q\)\) return false;/g,
+  `// Global match
+                const q = searchQuery.toLowerCase();
+                if (q) {
+                  const hName = item.houseName?.toLowerCase() || '';
+                  const desc = item.description?.toLowerCase() || '';
+                  const rep = item.report?.toLowerCase() || '';
+                  if (!hName.includes(q) && !desc.includes(q) && !rep.includes(q)) {
+                    return false;
+                  }
+                }`
 );
 
-fs.writeFileSync('server.ts', content);
+// Update placeholder
+content = content.replace(
+  /placeholder="Search by name\.\.\."/,
+  'placeholder="Search history..."'
+);
+
+fs.writeFileSync('src/App.tsx', content);
