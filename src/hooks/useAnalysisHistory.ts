@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AnalysisHistory } from '../types';
+import { get, set, keys } from 'idb-keyval';
 
 export function useAnalysisHistory(houseId: string | null) {
   const [history, setHistory] = useState<AnalysisHistory[]>([]);
@@ -7,21 +8,23 @@ export function useAnalysisHistory(houseId: string | null) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const loadAll = () => {
+    const loadAll = async () => {
       const all: AnalysisHistory[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('vastu_analysis_house_')) {
-          try {
-            const data = JSON.parse(localStorage.getItem(key) || '[]');
-            all.push(...data);
-          } catch (e) {
-            console.error(e);
+      try {
+        const storeKeys = await keys();
+        for (const key of storeKeys) {
+          if (typeof key === 'string' && key.startsWith('vastu_analysis_house_')) {
+            const data = await get(key);
+            if (data && Array.isArray(data)) {
+              all.push(...data);
+            }
           }
         }
+        all.sort((a, b) => b.timestamp - a.timestamp);
+        setAllHistory(all);
+      } catch (e) {
+        console.error('Failed to load all history from indexedDB', e);
       }
-      all.sort((a, b) => b.timestamp - a.timestamp);
-      setAllHistory(all);
     };
     
     loadAll();
@@ -30,29 +33,39 @@ export function useAnalysisHistory(houseId: string | null) {
       setHistory([]);
       return;
     }
-    const saved = localStorage.getItem(`vastu_analysis_house_${houseId}`);
-    if (saved) {
+    
+    const loadHouseHistory = async () => {
       try {
-        setHistory(JSON.parse(saved));
+        const saved = await get(`vastu_analysis_house_${houseId}`);
+        if (saved) {
+          setHistory(saved);
+        } else {
+          setHistory([]);
+        }
       } catch (e) {
         console.error('Failed to parse analysis history', e);
+        setHistory([]);
       }
-    } else {
-      setHistory([]);
-    }
+    };
+    
+    loadHouseHistory();
   }, [houseId]);
 
-  const saveHistory = (newHistory: AnalysisHistory[]) => {
+  const saveHistory = async (newHistory: AnalysisHistory[]) => {
     setHistory(newHistory);
     if (houseId) {
-      localStorage.setItem(`vastu_analysis_house_${houseId}`, JSON.stringify(newHistory));
-      
-      setAllHistory(prev => {
-        const others = prev.filter(h => h.houseId !== houseId);
-        const merged = [...others, ...newHistory];
-        merged.sort((a, b) => b.timestamp - a.timestamp);
-        return merged;
-      });
+      try {
+        await set(`vastu_analysis_house_${houseId}`, newHistory);
+        
+        setAllHistory(prev => {
+          const others = prev.filter(h => h.houseId !== houseId);
+          const merged = [...others, ...newHistory];
+          merged.sort((a, b) => b.timestamp - a.timestamp);
+          return merged;
+        });
+      } catch (e) {
+        console.error('Failed to save to IndexedDB', e);
+      }
     }
   };
 

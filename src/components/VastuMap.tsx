@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { APIProvider, Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, Pin, MapControl, ControlPosition } from '@vis.gl/react-google-maps';
 import { Compass } from 'lucide-react';
+import { MapSearch } from './MapSearch';
 
 interface VastuMapProps {
   onLocationSelect?: (lat: number, lng: number) => void;
@@ -24,9 +25,13 @@ export function VastuMap({ onLocationSelect }: VastuMapProps) {
 
   const handleMapClick = (e: any) => {
     if (e.detail.latLng) {
-      setPosition(e.detail.latLng);
-      if (onLocationSelect) onLocationSelect(e.detail.latLng.lat, e.detail.latLng.lng);
+      handleLocationUpdate(e.detail.latLng.lat, e.detail.latLng.lng);
     }
+  };
+
+  const handleLocationUpdate = (lat: number, lng: number) => {
+    setPosition({ lat, lng });
+    if (onLocationSelect) onLocationSelect(lat, lng);
   };
 
   return (
@@ -41,6 +46,12 @@ export function VastuMap({ onLocationSelect }: VastuMapProps) {
           gestureHandling="greedy"
           internalUsageAttributionIds={["gmp_mcp_codeassist_v1_aistudio"]}
         >
+          <MapControl position={ControlPosition.TOP_CENTER}>
+            <div className="mt-4 px-4 w-full min-w-[300px] sm:min-w-[400px]">
+              <MapSearch onLocationSelect={handleLocationUpdate} />
+            </div>
+          </MapControl>
+          
           <AdvancedMarker position={position}>
             <div className="relative flex items-center justify-center">
               {/* Compass overlay around the pin */}

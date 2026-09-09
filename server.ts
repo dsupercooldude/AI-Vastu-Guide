@@ -60,6 +60,7 @@ async function createServer() {
   const FALLBACK_MODELS = ['gemini-3.5-flash', 'gemini-3.5-flash-lite'];
   
   class ModelMutexes {
+  mutexes: Record<string, any>;
   constructor() {
     this.mutexes = {};
   }

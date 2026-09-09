@@ -264,7 +264,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {history.length > 0 && history[0].timestamp > Date.now() - 5000 && (
+                {history.length > 0 && (
                   <div className="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-stone-200 border-l-4 border-l-amber-500">
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-lg font-bold text-stone-800">Latest Analysis Report</h3>
