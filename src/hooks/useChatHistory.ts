@@ -1,3 +1,4 @@
+import { onAuthStateChanged } from 'firebase/auth';
 import { useState, useEffect } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, doc, setDoc, onSnapshot, query, where, orderBy, writeBatch } from 'firebase/firestore';
@@ -10,50 +11,53 @@ export function useChatHistory(profileId: string | null) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!auth.currentUser || !profileId) {
-      setMessages([]);
-      return;
-    }
-    
-    const userId = auth.currentUser.uid;
-    const path = `users/${userId}/chat`;
-    
-    const q = query(collection(db, path), where("profileId", "==", profileId));
-    
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const loaded: ChatMessage[] = [];
-      snapshot.forEach(doc => {
-        loaded.push(doc.data() as ChatMessage);
-      });
-      
-      const now = Date.now();
-      const filtered = loaded.filter(m => now - m.timestamp < SEVEN_DAYS_MS);
-      filtered.sort((a, b) => a.timestamp - b.timestamp);
-      
-      if (filtered.length === 0 && snapshot.docs.length === 0) {
-        // Init message
-        const id = crypto.randomUUID();
-        const initMsg = {
-          id,
-          profileId,
-          role: 'assistant',
-          content: 'Hello! I am your Vastu Shastra expert. How can I help you today?',
-          timestamp: Date.now(),
-          userId
-        } as any;
-        try {
-          await setDoc(doc(db, `users/${userId}/chat/${id}`), initMsg);
-        } catch(e) {
-          console.error(e);
-        }
-      } else {
-        setMessages(filtered);
+    let unsubscribeDb = () => {};
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (!user || !profileId) {
+        setMessages([]);
+        return;
       }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
+      const userId = user.uid;
+      const path = `users/${userId}/chat`;
+      const q = query(collection(db, path), where("profileId", "==", profileId));
+      
+      if (unsubscribeDb) unsubscribeDb();
+      unsubscribeDb = onSnapshot(q, async (snapshot) => {
+        const loaded: any[] = [];
+        snapshot.forEach(doc => {
+          loaded.push(doc.data());
+        });
+        
+        const now = Date.now();
+        const filtered = loaded.filter(m => now - m.timestamp < SEVEN_DAYS_MS);
+        filtered.sort((a, b) => a.timestamp - b.timestamp);
+        
+        if (filtered.length === 0 && snapshot.docs.length === 0) {
+          const id = crypto.randomUUID();
+          const initMsg = {
+            id,
+            profileId,
+            role: 'assistant',
+            content: 'Hello! I am your Vastu Shastra expert. How can I help you today?',
+            timestamp: Date.now(),
+            userId
+          };
+          try {
+            await setDoc(doc(db, `users/${userId}/chat/${id}`), initMsg);
+          } catch(e) {
+            console.error(e);
+          }
+        } else {
+          setMessages(filtered);
+        }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, path);
+      });
     });
-
-    return unsubscribe;
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeDb) unsubscribeDb();
+    };
   }, [profileId]);
 
   const saveMessage = async (msg: ChatMessage) => {

@@ -36,22 +36,18 @@ export function Compass({ onDirectionDetected }: CompassProps) {
   }, [onDirectionDetected]);
 
   const startCompass = () => {
-    if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
-      // iOS 13+ devices
-      (DeviceOrientationEvent as any).requestPermission()
-        .then((permissionState: string) => {
-          if (permissionState === 'granted') {
-            window.addEventListener('deviceorientation', handleOrientation, true);
-            setStarted(true);
-          } else {
-            setError('Permission to access device orientation was denied.');
-          }
-        })
-        .catch(console.error);
+    const req = typeof window !== 'undefined' && (window as any).DeviceOrientationEvent?.requestPermission;
+    if (typeof req === 'function') {
+      req().then((permissionState: string) => {
+        if (permissionState === 'granted') {
+          window.addEventListener('deviceorientation', handleOrientation, true);
+          setStarted(true);
+        } else {
+          setError('Permission to access device orientation was denied.');
+        }
+      }).catch(console.error);
     } else {
-      // non iOS 13+ devices
       window.addEventListener('deviceorientationabsolute', handleOrientation as any, true);
-      // Fallback
       window.addEventListener('deviceorientation', handleOrientation, true);
       setStarted(true);
     }

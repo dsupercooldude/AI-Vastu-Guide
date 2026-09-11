@@ -4,9 +4,12 @@ interface ConfidenceMeterProps {
   confidence: number;
   onRefresh: () => void;
   isRefreshing: boolean;
+  latestInsight?: string | null;
 }
 
-export function ConfidenceMeter({ confidence, onRefresh, isRefreshing }: ConfidenceMeterProps) {
+import Markdown from 'react-markdown';
+
+export function ConfidenceMeter({ confidence, onRefresh, isRefreshing, latestInsight }: ConfidenceMeterProps) {
   // Determine color based on confidence level
   const colorClass = 
     confidence >= 85 ? 'bg-green-500' : 
@@ -49,6 +52,12 @@ export function ConfidenceMeter({ confidence, onRefresh, isRefreshing }: Confide
           {confidence}%
         </span>
       </div>
+      {latestInsight && (
+        <div className="mt-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-800">
+          <p className="font-semibold mb-1 flex items-center gap-1"><Activity className="w-4 h-4"/> Latest Engine Insight</p>
+          <div className="prose prose-sm prose-indigo max-w-none"><Markdown>{latestInsight}</Markdown></div>
+        </div>
+      )}
     </div>
   );
 }

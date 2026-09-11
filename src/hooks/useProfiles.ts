@@ -1,3 +1,4 @@
+import { onAuthStateChanged } from 'firebase/auth';
 import { useState, useEffect } from 'react';
 import { Profile } from '../types';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
@@ -9,34 +10,48 @@ export function useProfiles() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
-    const userId = auth.currentUser.uid;
-    const path = `users/${userId}/profiles`;
-    
-    const unsubscribe = onSnapshot(collection(db, path), (snapshot) => {
-      const loaded: Profile[] = [];
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        loaded.push({ id: data.id, name: data.name, password: data.password });
-      });
-      setProfiles(loaded);
-      
-      const lastActive = localStorage.getItem('vastu_active_profile');
-      if (loaded.length > 0) {
-        if (lastActive && loaded.some(p => p.id === lastActive)) {
-          if (!currentProfileId) setCurrentProfileId(lastActive);
-        } else if (!currentProfileId) {
-          setCurrentProfileId(loaded[0].id);
-        }
-      } else {
-        setCurrentProfileId(null);
+    let unsubscribeDb = () => {};
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setProfiles([]);
+        return;
       }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
+      const userId = user.uid;
+      const path = `users/${userId}/profiles`;
+      
+      unsubscribeDb = onSnapshot(collection(db, path), (snapshot) => {
+        const loaded: any[] = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          loaded.push({ id: data.id, name: data.name, password: data.password });
+        });
+        setProfiles(loaded);
+        
+        const lastActive = localStorage.getItem('vastu_active_profile');
+        if (loaded.length > 0) {
+          if (lastActive && loaded.some(p => p.id === lastActive)) {
+            setCurrentProfileId(prev => {
+               if (!prev) {
+                   const prof = loaded.find(p => p.id === lastActive);
+                   if (prof && !prof.password) setIsAuthenticated(true);
+                   return lastActive;
+               }
+               return prev;
+            });
+          }
+        } else {
+          setCurrentProfileId(null);
+        }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, path);
+      });
     });
 
-    return unsubscribe;
-  }, [currentProfileId]);
+    return () => {
+      unsubscribeAuth();
+      unsubscribeDb();
+    };
+  }, []); // Only run once on mount
 
   const addProfile = async (name: string, password?: string) => {
     if (!auth.currentUser) return;
@@ -66,7 +81,7 @@ export function useProfiles() {
 
   const authenticate = (password: string) => {
     const prof = profiles.find(p => p.id === currentProfileId);
-    if (prof && prof.password === password) {
+    if (prof && (prof.password === password || (!prof.password && password === ''))) {
       setIsAuthenticated(true);
       return true;
     }
@@ -75,6 +90,11 @@ export function useProfiles() {
 
   const logout = () => {
     setIsAuthenticated(false);
+  };
+  const switchUser = () => {
+    setCurrentProfileId(null);
+    setIsAuthenticated(false);
+    localStorage.removeItem('vastu_active_profile');
   };
 
   const deleteProfile = async (id: string) => {
@@ -108,6 +128,7 @@ export function useProfiles() {
     switchProfile,
     authenticate,
     logout,
+    switchUser,
     deleteProfile
   };
 }

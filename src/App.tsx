@@ -16,12 +16,43 @@ import { PWAInstallButton } from './components/PWAInstallButton';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AIChat } from './components/AIChat';
 import Markdown from 'react-markdown';
-import { Home, History, MessageSquare, Plus, AlignLeft, RefreshCw, Clock, Lock, Download, ShieldAlert } from 'lucide-react';
+import { Home, History, MessageSquare, Plus, AlignLeft, RefreshCw, Clock, Lock, Download, ShieldAlert, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportToPDF } from './utils/pdfExport';
 
+
+const FURNITURE_SUGGESTIONS: Record<string, string> = {
+  "North": "Water elements, mirrors, aquariums, lightweight furniture (blue/green accents).",
+  "Northeast": "Prayer items, spiritual books, meditation cushions. Keep entirely clutter-free.",
+  "East": "Indoor plants, wooden furniture, bright lamps, light decor (green/brown accents).",
+  "Southeast": "Kitchen appliances, fireplaces, copper/red decor, heavy triangular objects.",
+  "South": "Heavy wooden furniture, beds (head facing South), solid cabinets (red/orange).",
+  "Southwest": "Master bed, heavy wardrobes, heavy sculptures, family photos (yellow/earthy).",
+  "West": "Dining tables, metal furniture, study desks, circular objects (white/blue).",
+  "Northwest": "Guest beds, wind chimes, lightweight moving objects (white/silver/grey)."
+};
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const key = Object.keys(FURNITURE_SUGGESTIONS).find(k => label && label.includes(k));
+    const decor = key ? FURNITURE_SUGGESTIONS[key] : "Keep balanced and clutter-free.";
+    return (
+      <div className="bg-white p-3 border border-stone-200 shadow-xl rounded-xl max-w-[250px]">
+        <p className="font-bold text-stone-800">{label}</p>
+        <p className="text-amber-600 font-medium text-sm mb-1">Score: {payload[0].value}/100</p>
+        <div className="mt-2 pt-2 border-t border-stone-100">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Suggested Decor</p>
+          <p className="text-sm text-stone-700 leading-snug">{decor}</p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function App() {
-  const { profiles, currentProfileId, currentProfile, isAuthenticated, addProfile, switchProfile, authenticate, logout, deleteProfile } = useProfiles();
+
+  const { profiles, currentProfileId, currentProfile, isAuthenticated, addProfile, switchProfile, authenticate, logout, switchUser, deleteProfile } = useProfiles();
   const { houses, currentHouseId, currentHouse, addHouse, switchHouse, deleteHouse } = useHouses(currentProfileId);
   const { messages, sendMessage, loading: chatLoading } = useChatHistory(currentProfileId);
   const { history, allHistory, analyzeHouse, loading: analysisLoading } = useAnalysisHistory(currentHouseId);
@@ -30,7 +61,7 @@ export default function App() {
   const [minScore, setMinScore] = useState(0);
   const [previewImageSrc, setPreviewImageSrc] = useState<string | null>(null);
   const { checkedItems, toggleCheck, setVerified } = useChecklist(currentHouseId);
-  const { confidence, lastUpdated, isRefreshing, refreshBaseline, setConfidence } = useEngineState();
+  const { confidence, lastUpdated, isRefreshing, latestInsight, refreshBaseline, setConfidence } = useEngineState();
 
   const [activeTab, setActiveTab] = useState<'analyzer' | 'chat' | 'history'>('analyzer');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -126,7 +157,7 @@ export default function App() {
             <button type="submit" className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-colors">
               Unlock Profile
             </button>
-            <button type="button" onClick={() => switchProfile('', true)} className="text-sm text-stone-500 hover:text-stone-800 mt-4 underline">
+            <button type="button" onClick={switchUser} className="text-sm text-stone-500 hover:text-stone-800 mt-4 underline">
               Switch Profile
             </button>
           </form>
@@ -160,6 +191,7 @@ export default function App() {
             <div className="flex items-center justify-between bg-stone-800 p-3 rounded-xl border border-stone-700">
               <span className="text-stone-200 font-medium">{currentProfile?.name}</span>
               <button onClick={logout} className="text-xs text-stone-400 hover:text-white bg-stone-700 px-2 py-1 rounded">Lock</button>
+              <button onClick={switchUser} className="text-xs text-stone-400 hover:text-white bg-stone-700 px-2 py-1 rounded">Switch</button>
             </div>
           </div>
 
@@ -311,7 +343,7 @@ export default function App() {
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
                                 <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
-                                <Tooltip cursor={{fill: '#f5f5f4'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                <Tooltip cursor={{fill: '#f5f5f4'}} content={<CustomTooltip />} />
                                 <Bar dataKey="score" fill="#d97706" radius={[4, 4, 0, 0]} />
                               </BarChart>
                             </ResponsiveContainer>
@@ -335,6 +367,22 @@ export default function App() {
                       </div>
 
                       <Markdown>{history[0].report}</Markdown>
+                      {history[0].remedies && history[0].remedies.length > 0 && (
+                        <div className="mt-8 pt-6 border-t border-stone-200">
+                          <h4 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2">
+                            <ShieldAlert className="w-5 h-5 text-amber-600" />
+                            Dosha Corrections & Remedies
+                          </h4>
+                          <ul className="space-y-3">
+                            {history[0].remedies.map((remedy, i) => (
+                              <li key={i} className="flex items-start gap-3 bg-amber-50/50 p-4 rounded-xl border border-amber-100">
+                                <div className="mt-0.5 w-6 h-6 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 font-bold text-xs">{i+1}</div>
+                                <p className="text-stone-700 leading-relaxed text-sm"><strong>{remedy.zone}</strong>: {remedy.defect} &rarr; {remedy.remedy}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
 
                   </div>

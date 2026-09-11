@@ -8,13 +8,42 @@ interface VastuMapProps {
 }
 
 
-function MapUpdater({ position }: { position: { lat: number, lng: number } }) {
+
+
+
+function MapController({ position, onLocation }: { position: {lat: number, lng: number}, onLocation: (lat: number, lng: number) => void }) {
   const map = useMap();
+  const onLocationRef = React.useRef(onLocation);
+  const initialized = React.useRef(false);
+
+  React.useEffect(() => {
+    onLocationRef.current = onLocation;
+  }, [onLocation]);
+
   useEffect(() => {
-    if (map) {
+    if (navigator.geolocation && map && !initialized.current) {
+      initialized.current = true;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          onLocationRef.current(lat, lng);
+          map.panTo({ lat, lng });
+          map.setZoom(16);
+        },
+        (err) => {
+          console.warn("Geolocation warning:", err.message || err);
+        }
+      );
+    }
+  }, [map]);
+
+  useEffect(() => {
+    if (map && initialized.current) {
       map.panTo(position);
     }
-  }, [position, map]);
+  }, [map, position]);
+
   return null;
 }
 
@@ -35,23 +64,7 @@ export function VastuMap({ onLocationSelect }: VastuMapProps) {
   }
 
   
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          setPosition({ lat, lng });
-          if (onLocationSelect) {
-            onLocationSelect(lat, lng);
-          }
-        },
-        (err) => {
-          console.error("Geolocation error:", err);
-        }
-      );
-    }
-  }, []);
+
 
   const handleMapClick = (e: any) => {
     if (e.detail.latLng) {
@@ -66,7 +79,7 @@ export function VastuMap({ onLocationSelect }: VastuMapProps) {
 
   return (
     <div className="w-full rounded-2xl overflow-hidden border border-stone-200 shadow-sm relative" style={{ height: '400px' }}>
-      <APIProvider apiKey={apiKey} libraries={['places']}>
+      <APIProvider apiKey={apiKey} libraries={['places']} version="beta">
         <Map
           defaultZoom={15}
           defaultCenter={position}
@@ -76,13 +89,14 @@ export function VastuMap({ onLocationSelect }: VastuMapProps) {
           gestureHandling="greedy"
           internalUsageAttributionIds={["gmp_mcp_codeassist_v1_aistudio"]}
         >
+          <MapController position={position} onLocation={handleLocationUpdate} />
           <MapControl position={ControlPosition.TOP_CENTER}>
             <div className="mt-4 px-4 w-full min-w-[300px] sm:min-w-[400px]">
               <MapSearch onLocationSelect={handleLocationUpdate} />
             </div>
           </MapControl>
           
-          <MapUpdater position={position} />
+          
           <AdvancedMarker position={position}>
             <div className="relative flex items-center justify-center">
               {/* Compass overlay around the pin */}

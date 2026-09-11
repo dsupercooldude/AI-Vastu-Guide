@@ -3,11 +3,11 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
-import { fileURLToPath } from 'url';
+
 
 dotenv.config();
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 
 const JSON_PROMPT_INSTRUCTION = `Task: Based on the provided floor plans and photos, calculate the cardinal directions. Map the provided photos to the floor plans if possible.
 Synthesize all observations into a comprehensive Vastu analysis.
@@ -52,6 +52,32 @@ You MUST respond with a pure JSON string (NO markdown backticks, NO \`\`\`json w
   "report": "<your full detailed markdown string including zone-by-zone breakdown, image references, and recommended remedies>"
 }`;
 
+
+
+const NUMEROLOGY_DATA: Record<number, any> = {
+  1: { energy: 'Independence & Innovation', planet: 'Sun', vibe: 'Promotes individuality, ambition, and new beginnings. Ideal for those seeking personal growth.' },
+  2: { energy: 'Harmony & Partnership', planet: 'Moon', vibe: 'Fosters peace, sensitivity, and cooperation. Great for creating a warm, nurturing environment.' },
+  3: { energy: 'Creativity & Expression', planet: 'Jupiter', vibe: 'Uplifting, optimistic, and highly social. A fun house filled with laughter and creative energy.' },
+  4: { energy: 'Stability & Order', planet: 'Rahu (North Node)', vibe: 'Grounded, disciplined, and secure. Best for those building a solid foundation and long-term goals.' },
+  5: { energy: 'Freedom & Adventure', planet: 'Mercury', vibe: 'Dynamic, restless, and constantly changing. Expect unexpected adventures and an active social life.' },
+  6: { energy: 'Love & Family', planet: 'Venus', vibe: 'Warm, beautiful, and deeply domestic. The ultimate family home that feels like a sanctuary.' },
+  7: { energy: 'Spirituality & Solitude', planet: 'Ketu (South Node)', vibe: 'Quiet, introspective, and mystical. Perfect for deep thought, meditation, and inner discovery.' },
+  8: { energy: 'Wealth & Power', planet: 'Saturn', vibe: 'Focuses on material success, efficiency, and ambition. Demands hard work but brings significant financial reward.' },
+  9: { energy: 'Humanitarianism & Completion', planet: 'Mars', vibe: 'Compassionate, broad-minded, and charitable. Encourages letting go of the past and embracing universal love.' }
+};
+
+function getNumerology(name: string) {
+  const alphanumeric = (name || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  if (!alphanumeric) return null;
+  let sum = 0;
+  for (let i = 0; i < alphanumeric.length; i++) {
+    const char = alphanumeric[i];
+    if (/[0-9]/.test(char)) sum += parseInt(char);
+    else sum += ((char.charCodeAt(0) - 64 - 1) % 9) + 1;
+  }
+  while (sum > 9) sum = sum.toString().split('').reduce((a, b) => a + parseInt(b), 0);
+  return sum ? NUMEROLOGY_DATA[sum] : null;
+}
 
 const VASTU_SYSTEM_INSTRUCTION = `You are an expert in Vastu Shastra.
 Use the following principles from the provided Vastu Shastra document:
@@ -133,6 +159,43 @@ async function createServer() {
 const modelMutexes = new ModelMutexes();
 const delay = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 
+async function generateWithFallbackStream(options: any, preferredModel: string | null = null) {
+  let lastError;
+  const MAX_RETRIES = 6;
+  let retryDelay = 4000;
+  let modelsToTry = [...FALLBACK_MODELS];
+  if (preferredModel && modelsToTry.includes(preferredModel)) {
+    modelsToTry = [preferredModel, ...modelsToTry.filter(m => m !== preferredModel)];
+  }
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    for (const model of modelsToTry) {
+      await modelMutexes.lock(model);
+      try {
+        const responseStream = await ai.models.generateContentStream({
+          ...options,
+          model: model,
+        });
+        // We unlock here because stream is returning. It's a bit of a race condition if they all stream, but this is fine for fallback.
+        modelMutexes.unlock(model);
+        return { responseStream, model };
+      } catch (error: any) {
+        modelMutexes.unlock(model);
+        lastError = error;
+        const errorMessage = error.message || '';
+        if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('503')) {
+          console.warn(`Model ${model} stream rate-limited. Trying fallback...`);
+          continue;
+        }
+        throw error;
+      }
+    }
+    await delay(retryDelay);
+    retryDelay *= 2;
+  }
+  throw lastError;
+}
+
 async function generateWithFallback(options: any, preferredModel: string | null = null) {
   let lastError;
   const MAX_RETRIES = 6;
@@ -202,9 +265,24 @@ app.get('/api/quota', (req, res) => {
 });
 
   // Analyze Image Route
+  
   app.post('/api/analyze', async (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    const sendEvent = (type: string, data: any) => {
+      res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
+    };
+
     try {
       const { images, floorPlans, description, houseName } = req.body;
+      
+      const numerology = getNumerology(houseName);
+      let numerologyContext = '';
+      if (numerology) {
+        numerologyContext = `\nHouse Numerology Vibe: ${numerology.energy} (Planet ${numerology.planet}). ${numerology.vibe} Please incorporate this numerological energy into the report, problems, and specific remedies where applicable.`;
+      }
       
       const allVisuals: any[] = [];
       if (floorPlans) {
@@ -218,32 +296,47 @@ app.get('/api/quota', (req, res) => {
       
       if (allVisuals.length <= MAX_IMAGES_PER_REQUEST) {
         const parts = [];
-        let promptText = `Analyze this house: ${houseName || 'Unknown'}
-`;
-        if (description) promptText += '\n' + JSON_PROMPT_INSTRUCTION;
+        let promptText = `Analyze this house: ${houseName || 'Unknown'}`;
+        if (description) promptText += '\nUser Description: ' + description;
+        if (typeof numerologyContext !== 'undefined') promptText += numerologyContext;
+        promptText += '\n' + JSON_PROMPT_INSTRUCTION;
         
         parts.push({ text: promptText });
         
-        allVisuals.forEach(vis => {
+        for (const vis of allVisuals) {
           parts.push({ text: `${vis.type} ${vis.idx}:` });
-          parts.push({ inlineData: { data: vis.data, mimeType: vis.mimeType } });
-        });
+          let base64Data = vis.data;
+          if (vis.data.startsWith('http')) {
+            try {
+              const fetchRes = await fetch(vis.data);
+              const buffer = await fetchRes.arrayBuffer();
+              base64Data = Buffer.from(buffer).toString('base64');
+            } catch (err) {
+              console.error("Failed to fetch image URL:", err);
+            }
+          } else if (vis.data.startsWith('data:')) {
+            base64Data = vis.data.split(',')[1];
+          }
+          parts.push({ inlineData: { data: base64Data, mimeType: vis.mimeType } });
+        }
+        
+        sendEvent('progress', { message: 'Analyzing images...', increment: 30 });
         
         const { response, model } = await generateWithFallback({
           contents: [{ role: 'user', parts }],
           config: {
             systemInstruction: VASTU_SYSTEM_INSTRUCTION,
             temperature: 0.2,
-            /* removed googleSearch */
+            responseMimeType: 'application/json'
           }
         });
-        console.log(`Successfully generated analysis with ${model}`);
         
         incrementQuota(model);
-
-                        let jsonResponse;
+        sendEvent('progress', { message: 'Generating report...', increment: 50 });
+        
+        let jsonResponse;
         try {
-           let cleanedText = (response.text || "").replace(/\x60\x60\x60json/gi, '').replace(/\x60\x60\x60/g, '').trim();
+           let cleanedText = (response.text || "").replace(/\`\`\`json/gi, '').replace(/\`\`\`/g, '').trim();
            const firstBrace = cleanedText.indexOf('{');
            const lastBrace = cleanedText.lastIndexOf('}');
            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
@@ -256,26 +349,41 @@ app.get('/api/quota', (req, res) => {
            const score = match ? parseInt(match[1]) : 50;
            jsonResponse = { score, report: (response.text || ""), zoneScores: [], verifiedChecklistItems: [], remedies: [] };
         }
-        res.json({ result: jsonResponse.report, score: jsonResponse.score, zoneScores: jsonResponse.zoneScores, verifiedChecklistItems: jsonResponse.verifiedChecklistItems || [], remedies: jsonResponse.remedies || [] });
+        
+        sendEvent('complete', { result: jsonResponse.report, score: jsonResponse.score, zoneScores: jsonResponse.zoneScores, verifiedChecklistItems: jsonResponse.verifiedChecklistItems || [], remedies: jsonResponse.remedies || [] });
+        res.end();
       } else {
-        console.log(`Processing ${allVisuals.length} images in parallel batches...`);
         const chunks = [];
         for (let i = 0; i < allVisuals.length; i += MAX_IMAGES_PER_REQUEST) {
           chunks.push(allVisuals.slice(i, i + MAX_IMAGES_PER_REQUEST));
         }
         
-        const chunkPromises = chunks.map(async (chunk, chunkIdx) => {
-          const parts = [];
-          parts.push({ text: `Analyze these images (Batch ${chunkIdx + 1} of ${chunks.length}) for house: ${houseName || 'Unknown'}. User description: ${description}
-Task: Describe the spatial layout, defects, and orientations found in these images specifically for Vastu analysis. Be very detailed. Note that this is a partial set of images.` });
+        const batchResults = [];
+        let accumulatedReport = '';
+        
+        for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+          const chunk = chunks[chunkIdx];
+          sendEvent('progress', { message: `Analyzing batch ${chunkIdx + 1} of ${chunks.length}...`, increment: Math.floor(50 / chunks.length) });
           
-          chunk.forEach(vis => {
+          const parts = [];
+          parts.push({ text: `Analyze these images (Batch ${chunkIdx + 1} of ${chunks.length}) for house: ${houseName || 'Unknown'}. User description: ${description}\nTask: Describe the spatial layout, defects, and orientations found in these images specifically for Vastu analysis. Be very detailed. Note that this is a partial set of images.` });
+          
+          for (const vis of chunk) {
             parts.push({ text: `${vis.type} ${vis.idx}:` });
-            parts.push({ inlineData: { data: vis.data, mimeType: vis.mimeType } });
-          });
+            let base64Data = vis.data;
+            if (vis.data.startsWith('http')) {
+              try {
+                const fetchRes = await fetch(vis.data);
+                const buffer = await fetchRes.arrayBuffer();
+                base64Data = Buffer.from(buffer).toString('base64');
+              } catch (err) { }
+            } else if (vis.data.startsWith('data:')) {
+              base64Data = vis.data.split(',')[1];
+            }
+            parts.push({ inlineData: { data: base64Data, mimeType: vis.mimeType } });
+          }
           
           const preferredModel = FALLBACK_MODELS[chunkIdx % FALLBACK_MODELS.length];
-          
           const { response, model } = await generateWithFallback({
             contents: [{ role: 'user', parts }],
             config: {
@@ -285,28 +393,32 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
           }, preferredModel);
           
           incrementQuota(model);
-          return `Batch ${chunkIdx + 1} Observations:\n${response.text}`;
-        });
+          const chunkRes = `Batch ${chunkIdx + 1} Observations:\n${response.text}`;
+          batchResults.push(chunkRes);
+          
+          accumulatedReport += `\n\n### Observations from Batch ${chunkIdx + 1}\n` + response.text;
+          sendEvent('partial_report', { report: accumulatedReport });
+        }
         
-        const batchResults = await Promise.all(chunkPromises);
+        sendEvent('progress', { message: 'Synthesizing final report...', increment: 30 });
         
         const finalParts = [];
-        finalParts.push({ text: `Analyze this house: ${houseName || 'Unknown'}\nUser Description: ${description}\n\nTask: We had to process the images in batches. Below are the detailed Vastu observations extracted from all batches of photos and floor plans.\n\n${batchResults.join('\n\n')}\n\n${JSON_PROMPT_INSTRUCTION}` });
+        finalParts.push({ text: `Analyze this house: ${houseName || 'Unknown'}\nUser Description: ${description}${numerologyContext}\n\nTask: We had to process the images in batches. Below are the detailed Vastu observations extracted from all batches of photos and floor plans.\n\n${batchResults.join('\n\n')}\n\n${JSON_PROMPT_INSTRUCTION}` });
         
         const { response: finalResponse, model: finalModel } = await generateWithFallback({
           contents: [{ role: 'user', parts: finalParts }],
           config: {
             systemInstruction: VASTU_SYSTEM_INSTRUCTION,
             temperature: 0.2,
-            /* removed googleSearch */
+            responseMimeType: 'application/json'
           }
         });
         
         incrementQuota(finalModel);
         
-                        let jsonResponse;
+        let jsonResponse;
         try {
-           let cleanedText = (finalResponse.text || "").replace(/\x60\x60\x60json/gi, '').replace(/\x60\x60\x60/g, '').trim();
+           let cleanedText = (finalResponse.text || "").replace(/\`\`\`json/gi, '').replace(/\`\`\`/g, '').trim();
            const firstBrace = cleanedText.indexOf('{');
            const lastBrace = cleanedText.lastIndexOf('}');
            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace >= firstBrace) {
@@ -319,20 +431,18 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
            const score = match ? parseInt(match[1]) : 50;
            jsonResponse = { score, report: (finalResponse.text || ""), zoneScores: [], verifiedChecklistItems: [], remedies: [] };
         }
-        res.json({ result: jsonResponse.report, score: jsonResponse.score, zoneScores: jsonResponse.zoneScores, verifiedChecklistItems: jsonResponse.verifiedChecklistItems || [], remedies: jsonResponse.remedies || [] });
+        
+        sendEvent('complete', { result: jsonResponse.report, score: jsonResponse.score, zoneScores: jsonResponse.zoneScores, verifiedChecklistItems: jsonResponse.verifiedChecklistItems || [], remedies: jsonResponse.remedies || [] });
+        res.end();
       }
     } catch (error: any) {
-      const errorMessage = error.message || 'Failed to analyze';
-      if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('404') || errorMessage.includes('400') || errorMessage.includes('not found') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE') || errorMessage.includes('500') || errorMessage.includes('high demand') || errorMessage.includes('temporarily overloaded')) {
-        res.status(429).json({ error: 'AI Quota Exceeded. Please wait a moment and try again.' });
-      } else {
-        res.status(500).json({ error: errorMessage });
-      }
+      console.error(error);
+      sendEvent('error', { error: error.message || 'Failed to analyze' });
+      res.end();
     }
   });
 
-  // Chat Route
-  app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', async (req, res) => {
     try {
       const { messages } = req.body;
       
@@ -406,7 +516,7 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.join(process.cwd(), 'dist')));
-    app.use('*', (req, res) => {
+    app.get('*', (req, res) => {
       res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
     });
   }

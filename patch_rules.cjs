@@ -1,15 +1,31 @@
 const fs = require('fs');
-let code = fs.readFileSync('firestore.rules', 'utf8');
+let rules = fs.readFileSync('firestore.rules', 'utf8');
 
-code = code.replace(
-  /&& \( !\('verifiedChecklistItems' in data\) \|\| data\.verifiedChecklistItems is list \);/g,
-  `&& ( !('verifiedChecklistItems' in data) || data.verifiedChecklistItems is list )
-        && ( !('remedies' in data) || data.remedies is list );`
-);
+const targetHouseEnd = `      allow delete: if isOwner(userId) && existing().userId == request.auth.uid;
+    }`;
 
-code = code.replace(
-  /hasOnly\(\['description', 'report', 'score', 'zoneScores', 'houseName', 'verifiedChecklistItems'\]\);/g,
-  `hasOnly(['description', 'report', 'score', 'zoneScores', 'houseName', 'verifiedChecklistItems', 'remedies']);`
-);
+const rulesToAdd = `
+    function isValidImage(data) {
+      return data.keys().hasAll(['id', 'base64', 'mimeType', 'createdAt'])
+        && data.id is string && data.id.size() <= 128
+        && data.base64 is string && data.base64.size() <= 1000000
+        && data.mimeType is string && data.mimeType.size() <= 100
+        && data.createdAt is number;
+    }
 
-fs.writeFileSync('firestore.rules', code);
+    match /users/{userId}/houses/{houseId}/photos/{imageId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidImage(incoming());
+      allow update: if isOwner(userId) && isValidImage(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt;
+      allow delete: if isOwner(userId);
+    }
+    
+    match /users/{userId}/houses/{houseId}/floorPlans/{imageId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidImage(incoming());
+      allow update: if isOwner(userId) && isValidImage(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt;
+      allow delete: if isOwner(userId);
+    }`;
+
+rules = rules.replace(targetHouseEnd, targetHouseEnd + rulesToAdd);
+fs.writeFileSync('firestore.rules', rules);

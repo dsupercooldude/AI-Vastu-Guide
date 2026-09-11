@@ -1,3 +1,4 @@
+import { onAuthStateChanged } from 'firebase/auth';
 import { useState, useEffect } from 'react';
 import { House } from '../types';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
@@ -8,42 +9,49 @@ export function useHouses(profileId: string | null) {
   const [currentHouseId, setCurrentHouseId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!auth.currentUser || !profileId) {
-      setHouses([]);
-      setCurrentHouseId(null);
-      return;
-    }
+    let unsubscribeDb = () => {};
     
-    const userId = auth.currentUser.uid;
-    const path = `users/${userId}/houses`;
-    
-    const q = query(collection(db, path), where("profileId", "==", profileId));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loaded: House[] = [];
-      snapshot.forEach(d => {
-        const data = d.data();
-        loaded.push({
-          id: data.id,
-          profileId: data.profileId,
-          name: data.name,
-          createdAt: data.createdAt
-        });
-      });
-      // Sort by creation time manually as we didn't index it yet
-      loaded.sort((a, b) => b.createdAt - a.createdAt);
-      setHouses(loaded);
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (!user || !profileId) {
+        setHouses([]);
+        setCurrentHouseId(null);
+        return;
+      }
       
-      setCurrentHouseId(prev => {
-        if (loaded.length > 0 && !prev) return loaded[0].id;
-        if (loaded.length === 0) return null;
-        return prev;
+      const userId = user.uid;
+      const path = `users/${userId}/houses`;
+      
+      const q = query(collection(db, path), where("profileId", "==", profileId));
+      
+      if (unsubscribeDb) unsubscribeDb();
+      unsubscribeDb = onSnapshot(q, (snapshot) => {
+        const loaded: any[] = [];
+        snapshot.forEach(d => {
+          const data = d.data();
+          loaded.push({
+            id: data.id,
+            profileId: data.profileId,
+            name: data.name,
+            createdAt: data.createdAt
+          });
+        });
+        loaded.sort((a, b) => b.createdAt - a.createdAt);
+        setHouses(loaded);
+        
+        setCurrentHouseId(prev => {
+          if (loaded.length > 0 && !prev) return loaded[0].id;
+          if (loaded.length === 0) return null;
+          return prev;
+        });
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, path);
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeDb) unsubscribeDb();
+    };
   }, [profileId]); // removed currentHouseId to prevent infinite re-renders/unsubs
 
   const addHouse = async (name: string) => {

@@ -59,17 +59,7 @@ export function LiveCamera({ onCapture, onClose }: LiveCameraProps) {
       setHeading(h);
     };
 
-    if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
-      (DeviceOrientationEvent as any).requestPermission()
-        .then((response: string) => {
-          if (response == 'granted') {
-            window.addEventListener('deviceorientation', handleOrientation, true);
-          }
-        })
-        .catch(console.error);
-    } else {
-      window.addEventListener('deviceorientation', handleOrientation, true);
-    }
+    window.addEventListener('deviceorientation', handleOrientation, true);
 
     return () => {
       if (stream) {

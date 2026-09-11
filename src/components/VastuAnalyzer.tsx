@@ -1,5 +1,6 @@
+import Markdown from 'react-markdown';
 import { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, AlertCircle, ArrowRight, X, LayoutTemplate, Plus, Maximize2, RefreshCw, MapPin, Trash2 } from 'lucide-react';
+import { Camera, Activity, Upload, AlertCircle, ArrowRight, X, LayoutTemplate, Plus, Maximize2, RefreshCw, MapPin, Trash2 } from 'lucide-react';
 import { ConfidenceMeter } from './ConfidenceMeter';
 import { LiveCamera } from './LiveCamera';
 import { AIEngineUsage } from './AIEngineUsage';
@@ -16,11 +17,12 @@ interface VastuAnalyzerProps {
   isRefreshing: boolean;
   houseName: string;
   houseId: string;
+  latestInsight?: string | null;
 }
 
 
 
-export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaseline, isRefreshing, houseName, houseId }: VastuAnalyzerProps) {
+export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaseline, isRefreshing, houseName, houseId, latestInsight }: VastuAnalyzerProps) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [floorPlans, setFloorPlans] = useState<ImageItem[]>([]);
   const [description, setDescription] = useState('');
@@ -28,6 +30,16 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
   const [error, setError] = useState('');
   
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [partialReport, setPartialReport] = useState('');
+  
+  useEffect(() => {
+    const handlePartial = (e: any) => {
+      if (e.detail) setPartialReport(e.detail);
+      else setPartialReport('');
+    };
+    window.addEventListener('vastu_partial_report', handlePartial);
+    return () => window.removeEventListener('vastu_partial_report', handlePartial);
+  }, []);
   const [previewImage, setPreviewImage] = useState<ImageItem | null>(null);
   const [retakeImageId, setRetakeImageId] = useState<string | null>(null);
   
@@ -36,6 +48,17 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
   const floorPlanInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (houseId) {
+      getHouseImages(houseId, 'photos').then(setImages);
+      getHouseImages(houseId, 'floorPlans').then(setFloorPlans);
+    } else {
+      setImages([]);
+      setFloorPlans([]);
+    }
+  }, [houseId]);
+
 
   useEffect(() => {
     let interval: any;
@@ -66,9 +89,14 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
         return;
       }
     }
+     
     try {
       const newFloorPlans = await Promise.all(files.map(f => processFile(f)));
-      setFloorPlans(prev => [...prev, ...newFloorPlans]);
+      setFloorPlans(prev => {
+        const next = [...prev, ...newFloorPlans];
+        if (houseId) saveHouseImages(houseId, 'floorPlans', next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to read one or more files');
     }
@@ -78,9 +106,14 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
     setError('');
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+     
     try {
       const newImages = await Promise.all(files.map(f => processFile(f)));
-      setImages(prev => [...prev, ...newImages]);
+      setImages(prev => {
+        const next = [...prev, ...newImages];
+        if (houseId) saveHouseImages(houseId, 'photos', next);
+        return next;
+      });
     } catch (err) {
       setError('Failed to read one or more files');
     }
@@ -131,8 +164,8 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
     try {
       const locationContext = location ? `\nProperty coordinates: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}. Please note its magnetic orientation based on these coordinates.` : '';
       await onAnalyze(
-        images.map(img => ({ data: img.base64, mimeType: img.mimeType })),
-        floorPlans.map(fp => ({ data: fp.base64, mimeType: fp.mimeType })),
+        images.map(img => ({ data: img.base64 || img.preview, mimeType: img.mimeType })),
+        floorPlans.map(fp => ({ data: fp.base64 || fp.preview, mimeType: fp.mimeType })),
         description + locationContext,
         houseName
       );
@@ -199,6 +232,7 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
         confidence={confidence} 
         onRefresh={onRefreshBaseline} 
         isRefreshing={isRefreshing} 
+        latestInsight={latestInsight}
       />
       
       <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden mt-8">
@@ -310,7 +344,18 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
               <div className="flex flex-col gap-2 shrink-0">
                 <button 
                   type="button"
-                  onClick={() => setIsCameraOpen(true)}
+                  onClick={() => {
+                    const req = typeof window !== 'undefined' && (window as any).DeviceOrientationEvent?.requestPermission;
+                    if (typeof req === 'function') {
+                      req().then((permission: string) => {
+                        if (permission === 'granted') setIsCameraOpen(true);
+                      }).catch((e: any) => {
+                        setIsCameraOpen(true);
+                      });
+                    } else {
+                      setIsCameraOpen(true);
+                    }
+                  }}
                   className="w-32 h-[3.8rem] border border-amber-300 bg-amber-50 rounded-xl flex items-center justify-center gap-2 text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition-colors text-sm font-bold shadow-sm"
                 >
                   <Camera className="w-4 h-4" /> AR Scanner
@@ -377,6 +422,12 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
                   style={{ width: `${((loadingStage + 1) / 3) * 100}%` }}
                 />
               </div>
+              {partialReport && (
+                <div className="mt-4 p-4 bg-white/60 border border-amber-200 rounded-lg text-sm text-stone-700">
+                  <h4 className="font-semibold mb-2 flex items-center gap-2"><Activity className="w-4 h-4 text-amber-500"/> Live Analysis Stream</h4>
+                  <div className="prose prose-sm max-w-none prose-amber"><Markdown>{partialReport}</Markdown></div>
+                </div>
+              )}
             </div>
           ) : (
             <button

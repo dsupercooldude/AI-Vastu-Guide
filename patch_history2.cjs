@@ -1,13 +1,6 @@
 const fs = require('fs');
 let code = fs.readFileSync('src/hooks/useAnalysisHistory.ts', 'utf8');
 
-const targetImports = `import { storage } from '../firebase';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';`;
-
-const replacementImports = ``;
-
-code = code.replace(targetImports, replacementImports);
-
 const targetUploadImages = `      const uploadImages = async (imgs: { data: string, mimeType: string }[], folder: string) => {
         if (!imgs || imgs.length === 0) return [];
         const urls = [];
