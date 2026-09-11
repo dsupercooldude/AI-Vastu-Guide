@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react';
+const fs = require('fs');
+
+const code = `import { useEffect, useRef } from 'react';
 import { useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
 import { Search } from 'lucide-react';
 
@@ -102,3 +104,6 @@ export function MapSearch({ onLocationSelect }: MapSearchProps) {
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/MapSearch.tsx', code);

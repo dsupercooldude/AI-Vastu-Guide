@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { get, set } from 'idb-keyval';
 
 export function useEngineState() {
   const [confidence, setConfidence] = useState(65);
@@ -7,17 +6,14 @@ export function useEngineState() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const savedConf = await get('vastu_confidence');
-        const savedTime = await get('vastu_last_updated');
-        if (savedConf) setConfidence(Number(savedConf));
-        if (savedTime) setLastUpdated(Number(savedTime));
-      } catch(e) {
-        console.error(e);
-      }
-    };
-    load();
+    try {
+      const savedConf = localStorage.getItem('vastu_confidence');
+      const savedTime = localStorage.getItem('vastu_last_updated');
+      if (savedConf) setConfidence(Number(savedConf));
+      if (savedTime) setLastUpdated(Number(savedTime));
+    } catch(e) {
+      console.error(e);
+    }
   }, []);
 
   const refreshBaseline = async () => {
@@ -37,8 +33,8 @@ export function useEngineState() {
       setConfidence(newConf);
       setLastUpdated(now);
       
-      await set('vastu_confidence', newConf.toString());
-      await set('vastu_last_updated', now.toString());
+      localStorage.setItem('vastu_confidence', newConf.toString());
+      localStorage.setItem('vastu_last_updated', now.toString());
     } catch (e) {
       if (e instanceof Error && e.message.includes('Quota')) {
         console.warn('AI Quota exceeded while refreshing baseline, will try again later.');

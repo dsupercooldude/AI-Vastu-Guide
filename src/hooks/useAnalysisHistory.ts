@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AnalysisHistory } from '../types';
-import { get, set, keys } from 'idb-keyval';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { collection, doc, setDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 export function useAnalysisHistory(houseId: string | null) {
   const [history, setHistory] = useState<AnalysisHistory[]>([]);
@@ -8,66 +9,53 @@ export function useAnalysisHistory(houseId: string | null) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const loadAll = async () => {
-      const all: AnalysisHistory[] = [];
-      try {
-        const storeKeys = await keys();
-        for (const key of storeKeys) {
-          if (typeof key === 'string' && key.startsWith('vastu_analysis_house_')) {
-            const data = await get(key);
-            if (data && Array.isArray(data)) {
-              all.push(...data);
-            }
-          }
-        }
-        all.sort((a, b) => b.timestamp - a.timestamp);
-        setAllHistory(all);
-      } catch (e) {
-        console.error('Failed to load all history from indexedDB', e);
-      }
-    };
+    if (!auth.currentUser) {
+      setAllHistory([]);
+      return;
+    }
     
-    loadAll();
+    const userId = auth.currentUser.uid;
+    const path = `users/${userId}/history`;
+    
+    // Load all history for search
+    const unsubscribeAll = onSnapshot(collection(db, path), (snapshot) => {
+      const all: AnalysisHistory[] = [];
+      snapshot.forEach(doc => {
+        all.push(doc.data() as AnalysisHistory);
+      });
+      all.sort((a, b) => b.timestamp - a.timestamp);
+      setAllHistory(all);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    });
 
-    if (!houseId) {
+    return unsubscribeAll;
+  }, []);
+
+  useEffect(() => {
+    if (!auth.currentUser || !houseId) {
       setHistory([]);
       return;
     }
     
-    const loadHouseHistory = async () => {
-      try {
-        const saved = await get(`vastu_analysis_house_${houseId}`);
-        if (saved) {
-          setHistory(saved);
-        } else {
-          setHistory([]);
-        }
-      } catch (e) {
-        console.error('Failed to parse analysis history', e);
-        setHistory([]);
-      }
-    };
+    const userId = auth.currentUser.uid;
+    const path = `users/${userId}/history`;
     
-    loadHouseHistory();
-  }, [houseId]);
+    const q = query(collection(db, path), where("houseId", "==", houseId));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const loaded: AnalysisHistory[] = [];
+      snapshot.forEach(doc => {
+        loaded.push(doc.data() as AnalysisHistory);
+      });
+      loaded.sort((a, b) => b.timestamp - a.timestamp);
+      setHistory(loaded);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    });
 
-  const saveHistory = async (newHistory: AnalysisHistory[]) => {
-    setHistory(newHistory);
-    if (houseId) {
-      try {
-        await set(`vastu_analysis_house_${houseId}`, newHistory);
-        
-        setAllHistory(prev => {
-          const others = prev.filter(h => h.houseId !== houseId);
-          const merged = [...others, ...newHistory];
-          merged.sort((a, b) => b.timestamp - a.timestamp);
-          return merged;
-        });
-      } catch (e) {
-        console.error('Failed to save to IndexedDB', e);
-      }
-    }
-  };
+    return unsubscribe;
+  }, [houseId]);
 
   const analyzeHouse = async (
     images: { data: string, mimeType: string }[],
@@ -75,7 +63,9 @@ export function useAnalysisHistory(houseId: string | null) {
     description: string,
     houseName: string
   ) => {
-    if (!houseId) return;
+    if (!houseId || !auth.currentUser) return;
+    const userId = auth.currentUser.uid;
+    
     setLoading(true);
     
     try {
@@ -88,20 +78,27 @@ export function useAnalysisHistory(houseId: string | null) {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      const newAnalysis: AnalysisHistory = {
-        id: crypto.randomUUID(),
+      const id = crypto.randomUUID();
+      const newAnalysis: any = {
+        id,
         houseId,
-        images: images.map(img => `data:${img.mimeType};base64,${img.data}`),
-        floorPlans: floorPlans.length > 0 ? floorPlans.map(fp => `data:${fp.mimeType};base64,${fp.data}`) : undefined,
+        
         description,
         report: data.result,
         score: data.score,
         houseName: houseName,
         timestamp: Date.now(),
-        verifiedChecklistItems: data.verifiedChecklistItems
+        verifiedChecklistItems: data.verifiedChecklistItems,
+        remedies: data.remedies,
+        userId
       };
       
-      saveHistory([newAnalysis, ...history]);
+      
+      
+      Object.keys(newAnalysis).forEach(key => newAnalysis[key] === undefined && delete newAnalysis[key]);
+
+      
+      await setDoc(doc(db, `users/${userId}/history/${id}`), newAnalysis);
       return newAnalysis;
     } catch (e: any) {
       console.error(e);

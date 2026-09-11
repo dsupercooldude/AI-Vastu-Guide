@@ -1,53 +1,54 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/App.tsx', 'utf8');
+let code = fs.readFileSync('src/App.tsx', 'utf8');
 
-content = content.replace(
-  /import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';/,
-  "import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';"
+code = code.replace(
+  "import { Home, History, MessageSquare, Plus, AlignLeft, RefreshCw, Clock, Lock, Download } from 'lucide-react';",
+  "import { Home, History, MessageSquare, Plus, AlignLeft, RefreshCw, Clock, Lock, Download, ShieldAlert } from 'lucide-react';"
 );
 
-// We need to inject the BarChart UI into the latest report section.
-const latestReportUI = `
-                    <div id="latest-report" className="prose prose-stone max-w-none bg-white p-4 rounded-xl">
-                      {history[0].zoneScores && history[0].zoneScores.length > 0 && (
-                        <div className="mb-8">
-                          <h4 className="text-sm font-bold text-stone-800 uppercase tracking-wide mb-4">Zone Compliance Breakdown</h4>
-                          <div className="h-64 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={history[0].zoneScores.map(z => ({ name: z.zone, score: z.score }))}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
-                                <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
-                                <Tooltip cursor={{fill: '#f5f5f4'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                <Bar dataKey="score" fill="#d97706" radius={[4, 4, 0, 0]} />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {history[0].floorPlans && history[0].floorPlans.map((fp, i) => (
-                          <div key={'fp-'+i} className="relative aspect-square rounded-lg overflow-hidden border border-stone-200">
-                            <img src={fp} alt="Floor Plan" className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(fp)} />
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 font-medium">Floor Plan {i+1}</div>
-                          </div>
-                        ))}
-                        {history[0].images && history[0].images.map((img, i) => (
-                          <div key={'img-'+i} className="relative aspect-square rounded-lg overflow-hidden border border-stone-200">
-                            <img src={img} alt="Property Image" className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(img)} />
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 font-medium">Photo {i+1}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <Markdown>{history[0].report}</Markdown>
-                    </div>
+const remedyCode = `
+                            <div id={\`report-\${item.id}\`} className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar bg-white p-2">
+                              <Markdown>{item.report}</Markdown>
+                              
+                              {item.remedies && item.remedies.length > 0 && (
+                                <div className="mt-6 border-t border-stone-100 pt-6">
+                                  <h4 className="font-bold text-stone-800 mb-4 flex items-center gap-2">
+                                    <ShieldAlert className="w-5 h-5 text-amber-600" />
+                                    Dosha Corrections & Remedies
+                                  </h4>
+                                  <div className="grid gap-3">
+                                    {item.remedies.map((remedy, i) => (
+                                      <div key={i} className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-4">
+                                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-2">
+                                          <div className="flex items-start gap-2">
+                                            <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0 mt-0.5">
+                                              {remedy.zone}
+                                            </span>
+                                            <p className="font-semibold text-stone-800 text-sm leading-tight">{remedy.defect}</p>
+                                          </div>
+                                          <div className="flex items-center gap-2 shrink-0">
+                                            <span className={\`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider \${remedy.cost === 'Low' ? 'bg-green-100 text-green-700' : remedy.cost === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}\`}>
+                                              Cost: {remedy.cost}
+                                            </span>
+                                            <span className={\`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider \${remedy.effort === 'Low' ? 'bg-blue-100 text-blue-700' : remedy.effort === 'Medium' ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}\`}>
+                                              Effort: {remedy.effort}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <p className="text-sm text-stone-600 mt-2 pl-1">
+                                          <span className="font-semibold text-amber-800">Action:</span> {remedy.remedy}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
 `;
 
-content = content.replace(
-  /<div id="latest-report" className="prose prose-stone max-w-none bg-white p-4 rounded-xl">.*?<\/Markdown>\s*<\/div>/s,
-  latestReportUI
+code = code.replace(
+  /<div id=\{\`report-\$\{item\.id\}\`\} className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar bg-white p-2">\s*<Markdown>\{item\.report\}<\/Markdown>\s*<\/div>/g,
+  remedyCode
 );
 
-fs.writeFileSync('src/App.tsx', content);
+fs.writeFileSync('src/App.tsx', code);

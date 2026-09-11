@@ -1,48 +1,70 @@
 import { useState, useEffect } from 'react';
 import { House } from '../types';
-import { get, set, del } from 'idb-keyval';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
 
 export function useHouses(profileId: string | null) {
   const [houses, setHouses] = useState<House[]>([]);
   const [currentHouseId, setCurrentHouseId] = useState<string | null>(null);
 
   useEffect(() => {
-    const load = async () => {
-      if (!profileId) {
-        setHouses([]);
-        setCurrentHouseId(null);
-        return;
-      }
-      try {
-        const saved = await get(`vastu_houses_${profileId}`);
-        if (saved && Array.isArray(saved)) {
-          setHouses(saved);
-          if (saved.length > 0) {
-            setCurrentHouseId(saved[0].id);
-          }
-        } else {
-          setHouses([]);
-          setCurrentHouseId(null);
-        }
-      } catch (e) {
-        console.error('Failed to parse houses', e);
-      }
-    };
-    load();
-  }, [profileId]);
+    if (!auth.currentUser || !profileId) {
+      setHouses([]);
+      setCurrentHouseId(null);
+      return;
+    }
+    
+    const userId = auth.currentUser.uid;
+    const path = `users/${userId}/houses`;
+    
+    const q = query(collection(db, path), where("profileId", "==", profileId));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const loaded: House[] = [];
+      snapshot.forEach(d => {
+        const data = d.data();
+        loaded.push({
+          id: data.id,
+          profileId: data.profileId,
+          name: data.name,
+          createdAt: data.createdAt
+        });
+      });
+      // Sort by creation time manually as we didn't index it yet
+      loaded.sort((a, b) => b.createdAt - a.createdAt);
+      setHouses(loaded);
+      
+      setCurrentHouseId(prev => {
+        if (loaded.length > 0 && !prev) return loaded[0].id;
+        if (loaded.length === 0) return null;
+        return prev;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    });
+
+    return unsubscribe;
+  }, [profileId]); // removed currentHouseId to prevent infinite re-renders/unsubs
 
   const addHouse = async (name: string) => {
-    if (!profileId) return;
-    const newHouse: House = {
-      id: crypto.randomUUID(),
+    if (!profileId || !auth.currentUser) return;
+    const userId = auth.currentUser.uid;
+    
+    const id = crypto.randomUUID();
+    const newHouse = {
+      id,
       profileId,
       name,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      userId
     };
-    const updated = [...houses, newHouse];
-    setHouses(updated);
-    setCurrentHouseId(newHouse.id);
-    await set(`vastu_houses_${profileId}`, updated);
+    
+    try {
+      await setDoc(doc(db, `users/${userId}/houses/${id}`), newHouse);
+      setCurrentHouseId(id);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `users/${userId}/houses/${id}`);
+    }
   };
 
   const switchHouse = (id: string) => {
@@ -50,15 +72,21 @@ export function useHouses(profileId: string | null) {
   };
 
   const deleteHouse = async (id: string) => {
-    if (!profileId) return;
-    const updated = houses.filter(h => h.id !== id);
-    setHouses(updated);
-    if (currentHouseId === id) {
-      setCurrentHouseId(updated.length > 0 ? updated[0].id : null);
-    }
+    if (!profileId || !auth.currentUser) return;
+    const userId = auth.currentUser.uid;
     
-    await set(`vastu_houses_${profileId}`, updated);
-    await del(`vastu_analysis_house_${id}`);
+    try {
+      await deleteDoc(doc(db, `users/${userId}/houses/${id}`));
+      if (currentHouseId === id) {
+        const remaining = houses.filter(h => h.id !== id);
+        setCurrentHouseId(remaining.length > 0 ? remaining[0].id : null);
+      }
+      
+      // Ideally we would delete associated history and chat here via cloud function
+      // but for client-side we'll leave it orphaned or do a query-delete
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `users/${userId}/houses/${id}`);
+    }
   };
 
   return {

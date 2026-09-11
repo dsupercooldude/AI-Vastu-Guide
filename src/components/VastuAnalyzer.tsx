@@ -6,6 +6,7 @@ import { AIEngineUsage } from './AIEngineUsage';
 import { VastuMap } from './VastuMap';
 import { Compass } from './Compass';
 import { ImageOverlayModal } from './ImageOverlayModal';
+import { compressImage, saveHouseImages, getHouseImages, deleteImage, ImageItem } from '../utils/imageUtils';
 
 interface VastuAnalyzerProps {
   onAnalyze: (images: {data: string, mimeType: string}[], floorPlans: {data: string, mimeType: string}[], description: string, houseName: string) => Promise<any>;
@@ -14,16 +15,12 @@ interface VastuAnalyzerProps {
   onRefreshBaseline: () => void;
   isRefreshing: boolean;
   houseName: string;
+  houseId: string;
 }
 
-interface ImageItem {
-  id: string;
-  preview: string;
-  base64: string;
-  mimeType: string;
-}
 
-export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaseline, isRefreshing, houseName }: VastuAnalyzerProps) {
+
+export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaseline, isRefreshing, houseName, houseId }: VastuAnalyzerProps) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [floorPlans, setFloorPlans] = useState<ImageItem[]>([]);
   const [description, setDescription] = useState('');
@@ -57,23 +54,7 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
     "Generating comprehensive AI report..."
   ];
 
-  const processFile = (file: File): Promise<ImageItem> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        const base64 = result.split(',')[1];
-        resolve({
-          id: crypto.randomUUID(),
-          preview: result,
-          base64,
-          mimeType: file.type
-        });
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
+  const processFile = compressImage;
 
   const handleFloorPlansChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setError('');
@@ -133,10 +114,12 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
 
   const removeImage = (id: string) => {
     setImages(prev => prev.filter(img => img.id !== id));
+    if (houseId) deleteImage(houseId, 'photos', id);
   };
   
   const removeFloorPlan = (id: string) => {
     setFloorPlans(prev => prev.filter(img => img.id !== id));
+    if (houseId) deleteImage(houseId, 'floorPlans', id);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -154,8 +137,6 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
         houseName
       );
       // Reset form
-      setImages([]);
-      setFloorPlans([]);
       setDescription('');
     } catch (err: any) {
       setError(err.message || 'Failed to analyze images');
@@ -330,9 +311,9 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
                 <button 
                   type="button"
                   onClick={() => setIsCameraOpen(true)}
-                  className="w-32 h-[3.8rem] border border-stone-300 rounded-xl flex items-center justify-center gap-2 text-stone-600 hover:bg-stone-50 hover:border-amber-400 transition-colors text-sm font-medium"
+                  className="w-32 h-[3.8rem] border border-amber-300 bg-amber-50 rounded-xl flex items-center justify-center gap-2 text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition-colors text-sm font-bold shadow-sm"
                 >
-                  <Camera className="w-4 h-4" /> Take
+                  <Camera className="w-4 h-4" /> AR Scanner
                 </button>
                 <button 
                   type="button"

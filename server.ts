@@ -40,6 +40,15 @@ You MUST respond with a pure JSON string (NO markdown backticks, NO \`\`\`json w
     { "zone": "Center", "score": <number 0-100> }
   ],
   "verifiedChecklistItems": [<array of numbers 1-8 for items you are 100% certain are compliant>],
+  "remedies": [
+    {
+      "defect": "<description of the defect/dosha>",
+      "zone": "<e.g., North-East>",
+      "remedy": "<specific, actionable physical remedy>",
+      "cost": "<Low, Medium, or High>",
+      "effort": "<Low, Medium, or High>"
+    }
+  ],
   "report": "<your full detailed markdown string including zone-by-zone breakdown, image references, and recommended remedies>"
 }`;
 
@@ -245,9 +254,9 @@ app.get('/api/quota', (req, res) => {
            console.error("Failed to parse JSON", e);
            const match = (response.text || "").match(/SCORE:\s*(\d+)/i);
            const score = match ? parseInt(match[1]) : 50;
-           jsonResponse = { score, report: (response.text || ""), zoneScores: [], verifiedChecklistItems: [] };
+           jsonResponse = { score, report: (response.text || ""), zoneScores: [], verifiedChecklistItems: [], remedies: [] };
         }
-        res.json({ result: jsonResponse.report, score: jsonResponse.score, zoneScores: jsonResponse.zoneScores, verifiedChecklistItems: jsonResponse.verifiedChecklistItems || [] });
+        res.json({ result: jsonResponse.report, score: jsonResponse.score, zoneScores: jsonResponse.zoneScores, verifiedChecklistItems: jsonResponse.verifiedChecklistItems || [], remedies: jsonResponse.remedies || [] });
       } else {
         console.log(`Processing ${allVisuals.length} images in parallel batches...`);
         const chunks = [];
@@ -308,9 +317,9 @@ Task: Describe the spatial layout, defects, and orientations found in these imag
            console.error("Failed to parse JSON", e);
            const match = (finalResponse.text || "").match(/SCORE:\s*(\d+)/i);
            const score = match ? parseInt(match[1]) : 50;
-           jsonResponse = { score, report: (finalResponse.text || ""), zoneScores: [], verifiedChecklistItems: [] };
+           jsonResponse = { score, report: (finalResponse.text || ""), zoneScores: [], verifiedChecklistItems: [], remedies: [] };
         }
-        res.json({ result: jsonResponse.report, score: jsonResponse.score, zoneScores: jsonResponse.zoneScores, verifiedChecklistItems: jsonResponse.verifiedChecklistItems || [] });
+        res.json({ result: jsonResponse.report, score: jsonResponse.score, zoneScores: jsonResponse.zoneScores, verifiedChecklistItems: jsonResponse.verifiedChecklistItems || [], remedies: jsonResponse.remedies || [] });
       }
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to analyze';

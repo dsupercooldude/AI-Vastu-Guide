@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidProfile(data, userId) {
+      return data.keys().hasAll(['id', 'name', 'userId'])
+        && data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && ( !('password' in data) || (data.password is string && data.password.size() <= 100) )
+        && data.userId == userId
+        && data.userId == request.auth.uid;
+    }
+
+    match /users/{userId}/profiles/{profileId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) 
+                    && isValidId(userId) && isValidId(profileId)
+                    && isValidProfile(incoming(), userId);
+      allow update: if isOwner(userId)
+                    && isValidProfile(incoming(), userId)
+                    && incoming().id == existing().id
+                    && incoming().userId == existing().userId
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'password']);
+      allow delete: if isOwner(userId) && existing().userId == request.auth.uid;
+    }
+
+    function isValidHouse(data, userId) {
+      return data.keys().hasAll(['id', 'profileId', 'name', 'createdAt', 'userId'])
+        && data.id is string && data.id.size() <= 128
+        && data.profileId is string && data.profileId.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.createdAt is number
+        && data.userId == userId
+        && data.userId == request.auth.uid;
+    }
+
+    match /users/{userId}/houses/{houseId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+                    && isValidId(userId) && isValidId(houseId)
+                    && isValidHouse(incoming(), userId)
+                    && exists(/databases/$(database)/documents/users/$(userId)/profiles/$(incoming().profileId));
+      allow update: if isOwner(userId)
+                    && isValidHouse(incoming(), userId)
+                    && incoming().id == existing().id
+                    && incoming().userId == existing().userId
+                    && incoming().profileId == existing().profileId
+                    && incoming().createdAt == existing().createdAt
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['name']);
+      allow delete: if isOwner(userId) && existing().userId == request.auth.uid;
+    }
+
+    function isValidHistory(data, userId) {
+      return data.keys().hasAll(['id', 'houseId', 'images', 'description', 'report', 'timestamp', 'userId'])
+        && data.id is string && data.id.size() <= 128
+        && data.houseId is string && data.houseId.size() <= 128
+        && data.images is list && data.images.size() <= 20
+        && data.description is string && data.description.size() <= 5000
+        && data.report is string && data.report.size() <= 50000
+        && data.timestamp is number
+        && data.userId == userId
+        && data.userId == request.auth.uid
+        && ( !('floorPlans' in data) || (data.floorPlans is list && data.floorPlans.size() <= 10) )
+        && ( !('score' in data) || (data.score is number) )
+        && ( !('zoneScores' in data) || (data.zoneScores is list) )
+        && ( !('houseName' in data) || (data.houseName is string && data.houseName.size() <= 100) )
+        && ( !('verifiedChecklistItems' in data) || data.verifiedChecklistItems is list )
+        && ( !('remedies' in data) || data.remedies is list );
+    }
+
+    match /users/{userId}/history/{historyId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+                    && isValidId(userId) && isValidId(historyId)
+                    && isValidHistory(incoming(), userId)
+                    && exists(/databases/$(database)/documents/users/$(userId)/houses/$(incoming().houseId));
+      allow update: if isOwner(userId)
+                    && isValidHistory(incoming(), userId)
+                    && incoming().id == existing().id
+                    && incoming().userId == existing().userId
+                    && incoming().houseId == existing().houseId
+                    && incoming().timestamp == existing().timestamp
+                    && incoming().images == existing().images
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['description', 'report', 'score', 'zoneScores', 'houseName', 'verifiedChecklistItems', 'remedies']);
+      allow delete: if isOwner(userId) && existing().userId == request.auth.uid;
+    }
+
+    function isValidChat(data, userId) {
+      return data.keys().hasAll(['id', 'profileId', 'role', 'content', 'timestamp', 'userId'])
+        && data.id is string && data.id.size() <= 128
+        && data.profileId is string && data.profileId.size() <= 128
+        && data.role is string && data.role.size() <= 20
+        && data.content is string && data.content.size() <= 10000
+        && data.timestamp is number
+        && data.userId == userId
+        && data.userId == request.auth.uid
+        && ( !('verifiedChecklistItems' in data) || data.verifiedChecklistItems is list )
+        && ( !('sources' in data) || data.sources is list );
+    }
+
+    match /users/{userId}/chat/{chatId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+                    && isValidId(userId) && isValidId(chatId)
+                    && isValidChat(incoming(), userId)
+                    && exists(/databases/$(database)/documents/users/$(userId)/profiles/$(incoming().profileId));
+      allow update: if false;
+      allow delete: if isOwner(userId) && existing().userId == request.auth.uid;
+    }
+
+    match /users/{userId}/checklist/{houseId} {
+      allow read, write: if isOwner(userId);
+    }
+  }
+}

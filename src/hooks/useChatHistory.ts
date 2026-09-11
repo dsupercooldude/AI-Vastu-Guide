@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { get, set } from 'idb-keyval';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { collection, doc, setDoc, onSnapshot, query, where, orderBy, writeBatch } from 'firebase/firestore';
 import { ChatMessage } from '../types';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -9,60 +10,81 @@ export function useChatHistory(profileId: string | null) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
-      if (!profileId) {
-        setMessages([]);
-        return;
-      }
-      try {
-        const saved = await get(`vastu_chat_${profileId}`);
-        if (saved && Array.isArray(saved)) {
-          const now = Date.now();
-          const filtered = saved.filter(m => now - m.timestamp < SEVEN_DAYS_MS);
-          setMessages(filtered);
-          if (saved.length !== filtered.length) {
-            await set(`vastu_chat_${profileId}`, filtered);
-          }
-        } else {
-          setMessages([{
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: 'Hello! I am your Vastu Shastra expert. How can I help you today?',
-            timestamp: Date.now()
-          }]);
+    if (!auth.currentUser || !profileId) {
+      setMessages([]);
+      return;
+    }
+    
+    const userId = auth.currentUser.uid;
+    const path = `users/${userId}/chat`;
+    
+    const q = query(collection(db, path), where("profileId", "==", profileId));
+    
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const loaded: ChatMessage[] = [];
+      snapshot.forEach(doc => {
+        loaded.push(doc.data() as ChatMessage);
+      });
+      
+      const now = Date.now();
+      const filtered = loaded.filter(m => now - m.timestamp < SEVEN_DAYS_MS);
+      filtered.sort((a, b) => a.timestamp - b.timestamp);
+      
+      if (filtered.length === 0 && snapshot.docs.length === 0) {
+        // Init message
+        const id = crypto.randomUUID();
+        const initMsg = {
+          id,
+          profileId,
+          role: 'assistant',
+          content: 'Hello! I am your Vastu Shastra expert. How can I help you today?',
+          timestamp: Date.now(),
+          userId
+        } as any;
+        try {
+          await setDoc(doc(db, `users/${userId}/chat/${id}`), initMsg);
+        } catch(e) {
+          console.error(e);
         }
-      } catch (e) {
-        console.error('Failed to load chat from indexedDB', e);
+      } else {
+        setMessages(filtered);
       }
-    };
-    load();
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    });
+
+    return unsubscribe;
   }, [profileId]);
 
-  const saveMessages = async (newMessages: ChatMessage[]) => {
-    setMessages(newMessages);
-    if (profileId) {
-      try {
-        await set(`vastu_chat_${profileId}`, newMessages);
-      } catch (e) {
-        console.error('Failed to save chat to indexedDB', e);
-      }
+  const saveMessage = async (msg: ChatMessage) => {
+    if (!auth.currentUser || !profileId) return;
+    const userId = auth.currentUser.uid;
+    const enrichedMsg: any = { ...msg, profileId, userId };
+    Object.keys(enrichedMsg).forEach(key => enrichedMsg[key] === undefined && delete enrichedMsg[key]);
+    try {
+      await setDoc(doc(db, `users/${userId}/chat/${msg.id}`), enrichedMsg);
+    } catch(e) {
+      handleFirestoreError(e, OperationType.WRITE, `users/${userId}/chat/${msg.id}`);
     }
   };
 
   const sendMessage = async (content: string) => {
-    if (!content.trim() || !profileId) return;
-
+    if (!content.trim() || !profileId || !auth.currentUser) return;
+    
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
       content,
       timestamp: Date.now()
     };
-
+    
+    // Add locally to feel responsive
     const updatedWithUser = [...messages, userMsg];
-    await saveMessages(updatedWithUser);
+    setMessages(updatedWithUser);
+    
+    await saveMessage(userMsg);
+    
     setLoading(true);
-
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -88,7 +110,7 @@ export function useChatHistory(profileId: string | null) {
           });
         }
       }
-
+      
       const aiMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -97,7 +119,7 @@ export function useChatHistory(profileId: string | null) {
         sources: sources?.length ? sources : undefined
       };
       
-      await saveMessages([...updatedWithUser, aiMsg]);
+      await saveMessage(aiMsg);
     } catch (e: any) {
       console.error(e);
       const errorMsg: ChatMessage = {
@@ -106,7 +128,7 @@ export function useChatHistory(profileId: string | null) {
         content: 'Sorry, I encountered an error communicating with the expert.',
         timestamp: Date.now()
       };
-      await saveMessages([...updatedWithUser, errorMsg]);
+      await saveMessage(errorMsg);
     } finally {
       setLoading(false);
     }

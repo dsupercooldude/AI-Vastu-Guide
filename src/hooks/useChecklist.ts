@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { get, set } from 'idb-keyval';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export const CHECKLIST_ITEMS = [
   { id: 1, text: 'Main entrance is located in North, East, or North-East.' },
@@ -17,14 +18,15 @@ export function useChecklist(houseId: string | null) {
 
   useEffect(() => {
     const load = async () => {
-      if (!houseId) {
+      if (!houseId || !auth.currentUser) {
         setCheckedItems([]);
         return;
       }
       try {
-        const saved = await get(`vastu_checklist_${houseId}`);
-        if (saved && Array.isArray(saved)) {
-          setCheckedItems(saved);
+        const userId = auth.currentUser.uid;
+        const d = await getDoc(doc(db, `users/${userId}/checklist/${houseId}`));
+        if (d.exists()) {
+          setCheckedItems(d.data().items || []);
         } else {
           setCheckedItems([]);
         }
@@ -36,21 +38,29 @@ export function useChecklist(houseId: string | null) {
     load();
   }, [houseId]);
 
+  const save = async (next: number[]) => {
+    if (!houseId || !auth.currentUser) return;
+    const userId = auth.currentUser.uid;
+    try {
+      await setDoc(doc(db, `users/${userId}/checklist/${houseId}`), { items: next, userId });
+    } catch(e) {
+      handleFirestoreError(e, OperationType.WRITE, `users/${userId}/checklist/${houseId}`);
+    }
+  }
+
   const toggleCheck = async (id: number) => {
     if (!houseId) return;
     const next = checkedItems.includes(id) ? checkedItems.filter(i => i !== id) : [...checkedItems, id];
     setCheckedItems(next);
-    await set(`vastu_checklist_${houseId}`, next);
+    await save(next);
   };
 
   const setVerified = async (ids: number[]) => {
     if (!houseId) return;
-    // We only Auto-Check if they are not already checked
-    // We don't uncheck things they've manually checked.
     const safeIds = Array.isArray(ids) ? ids : [];
     const next = [...new Set([...checkedItems, ...safeIds])];
     setCheckedItems(next);
-    await set(`vastu_checklist_${houseId}`, next);
+    await save(next);
   };
 
   return { checkedItems, toggleCheck, setVerified };

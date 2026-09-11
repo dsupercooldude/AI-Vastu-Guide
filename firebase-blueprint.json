@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "Profile",
+      "description": "User profile / sub-account",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "password": { "type": "string", "maxLength": 100 },
+        "userId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "name", "userId"]
+    },
+    "House": {
+      "title": "House",
+      "description": "House belonging to a profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "profileId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "number" },
+        "userId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "profileId", "name", "createdAt", "userId"]
+    },
+    "AnalysisHistory": {
+      "title": "AnalysisHistory",
+      "description": "History of Vastu analysis for a house",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "houseId": { "type": "string", "maxLength": 128 },
+        "images": { "type": "array" },
+        "floorPlans": { "type": "array" },
+        "description": { "type": "string", "maxLength": 5000 },
+        "report": { "type": "string", "maxLength": 50000 },
+        "score": { "type": "number" },
+        "houseName": { "type": "string", "maxLength": 100 },
+        "timestamp": { "type": "number" },
+        "verifiedChecklistItems": { "type": "array" },
+        "userId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "houseId", "images", "description", "report", "timestamp", "userId"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Chat message in Vastu advisor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "profileId": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "maxLength": 20 },
+        "content": { "type": "string", "maxLength": 10000 },
+        "timestamp": { "type": "number" },
+        "verifiedChecklistItems": { "type": "array" },
+        "userId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "profileId", "role", "content", "timestamp", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/profiles/{profileId}": {
+      "schema": { "$ref": "#/entities/Profile" },
+      "description": "User profiles"
+    },
+    "/users/{userId}/houses/{houseId}": {
+      "schema": { "$ref": "#/entities/House" },
+      "description": "Houses"
+    },
+    "/users/{userId}/history/{historyId}": {
+      "schema": { "$ref": "#/entities/AnalysisHistory" },
+      "description": "Analysis history"
+    },
+    "/users/{userId}/chat/{chatId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Chat messages"
+    }
+  }
+}

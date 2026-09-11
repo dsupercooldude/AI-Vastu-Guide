@@ -1,75 +1,70 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/components/VastuAnalyzer.tsx', 'utf8');
+let code = fs.readFileSync('src/components/VastuAnalyzer.tsx', 'utf8');
 
-if (!content.includes('import { AIEngineUsage }')) {
-  content = content.replace(
-    "import { LiveCamera } from './LiveCamera';",
-    "import { LiveCamera } from './LiveCamera';\nimport { AIEngineUsage } from './AIEngineUsage';\nimport { useEffect } from 'react';"
-  );
-}
+// add houseId to interface
+code = code.replace(
+  "  houseName: string;\n}",
+  "  houseName: string;\n  houseId: string;\n}"
+);
 
-// Add state for loading progress
-content = content.replace(
-  "const [isCameraOpen, setIsCameraOpen] = useState(false);",
-  `const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [loadingStage, setLoadingStage] = useState(0);
+// add imageUtils import
+code = code.replace(
+  "import { ImageOverlayModal } from './ImageOverlayModal';",
+  "import { ImageOverlayModal } from './ImageOverlayModal';\nimport { compressImage, saveHouseImages, getHouseImages, ImageItem } from '../utils/imageUtils';"
+);
+
+// remove the internal ImageItem interface if it exists
+code = code.replace(
+  /interface ImageItem \{\n  id: string;\n  preview: string;\n  base64: string;\n  mimeType: string;\n\}/g,
+  ""
+);
+
+// update function signature
+code = code.replace(
+  "export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaseline, isRefreshing, houseName }: VastuAnalyzerProps) {",
+  "export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaseline, isRefreshing, houseName, houseId }: VastuAnalyzerProps) {"
+);
+
+// add effect to load images when houseId changes
+const loadImagesEffect = `
+  useEffect(() => {
+    if (houseId) {
+      getHouseImages(houseId, 'photos').then(imgs => setImages(imgs));
+      getHouseImages(houseId, 'floorPlans').then(fps => setFloorPlans(fps));
+    } else {
+      setImages([]);
+      setFloorPlans([]);
+    }
+  }, [houseId]);
 
   useEffect(() => {
-    let interval: any;
-    if (loading) {
-      setLoadingStage(0);
-      interval = setInterval(() => {
-        setLoadingStage(prev => (prev < 2 ? prev + 1 : prev));
-      }, 3500); // move to next stage every 3.5 seconds
+    if (houseId && !loading) {
+      saveHouseImages(houseId, 'photos', images);
     }
-    return () => clearInterval(interval);
-  }, [loading]);
+  }, [images, houseId, loading]);
 
-  const loadingStages = [
-    "Processing images and mapping floor plans...",
-    "Calculating spatial Vastu vectors...",
-    "Generating comprehensive AI report..."
-  ];`
-);
-
-// Inject AIEngineUsage before ConfidenceMeter
-content = content.replace(
-  "<ConfidenceMeter",
-  "<AIEngineUsage />\n      <ConfidenceMeter"
-);
-
-// Update submit button to detailed progress bar
-const newButton = `
-          {loading ? (
-            <div className="w-full bg-stone-100 rounded-xl p-4 flex flex-col gap-3 border border-stone-200">
-              <div className="flex items-center justify-between text-sm font-bold text-amber-700">
-                <span className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-amber-600/30 border-t-amber-600 rounded-full animate-spin" />
-                  {loadingStages[loadingStage]}
-                </span>
-                <span>{Math.round(((loadingStage + 1) / 3) * 100)}%</span>
-              </div>
-              <div className="h-2 w-full bg-stone-200 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-amber-500 rounded-full transition-all duration-500 ease-out"
-                  style={{ width: \`\${((loadingStage + 1) / 3) * 100}%\` }}
-                />
-              </div>
-            </div>
-          ) : (
-            <button
-              type="submit"
-              disabled={images.length === 0 && floorPlans.length === 0}
-              className="w-full py-4 bg-amber-600 hover:bg-amber-700 disabled:bg-stone-300 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-lg"
-            >
-              Analyze Complete House <ArrowRight className="w-5 h-5" />
-            </button>
-          )}
+  useEffect(() => {
+    if (houseId && !loading) {
+      saveHouseImages(houseId, 'floorPlans', floorPlans);
+    }
+  }, [floorPlans, houseId, loading]);
 `;
 
-content = content.replace(
-  /<button[\s\S]*?disabled=\{loading \|\| \(images\.length === 0 && floorPlans\.length === 0\)\}[\s\S]*?Analyzing\.\.\.[\s\S]*?<\/button>/,
-  newButton.trim()
+code = code.replace(
+  "const [error, setError] = useState<string>('');",
+  "const [error, setError] = useState<string>('');\n" + loadImagesEffect
 );
 
-fs.writeFileSync('src/components/VastuAnalyzer.tsx', content);
+// Replace processFile
+code = code.replace(
+  /const processFile = \(file: File\): Promise<ImageItem> => \{[\s\S]*?\}\);\n  \};/,
+  `const processFile = compressImage;`
+);
+
+// Prevent Reset on submit
+code = code.replace(
+  "      setImages([]);\n      setFloorPlans([]);\n      setDescription('');\n    } catch (err: any) {",
+  "      setDescription('');\n    } catch (err: any) {"
+);
+
+fs.writeFileSync('src/components/VastuAnalyzer.tsx', code);

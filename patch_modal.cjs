@@ -1,4 +1,6 @@
+const fs = require('fs');
 
+const code = `
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Grid3X3, Settings2 } from 'lucide-react';
 
@@ -93,8 +95,8 @@ export function ImageOverlayModal({ src, onClose, actions }: ImageOverlayModalPr
                 const angle = rotation + (i * 22.5) - 11.25;
                 const rad1 = (angle * Math.PI) / 180;
                 const rad2 = ((angle + 22.5) * Math.PI) / 180;
-                const cx = `${centerPos.x}%`;
-                const cy = `${centerPos.y}%`;
+                const cx = \`\${centerPos.x}%\`;
+                const cy = \`\${centerPos.y}%\`;
                 
                 // We draw massive lines that overflow the image bounds to ensure coverage
                 const r = 2000;
@@ -114,14 +116,14 @@ export function ImageOverlayModal({ src, onClose, actions }: ImageOverlayModalPr
                 return (
                   <g key={zone.name}>
                     <polygon 
-                      points={`${cx},${cy} ${p1x}%,${p1y}% ${p2x}%,${p2y}%`} 
+                      points={\`\${cx},\${cy} \${p1x}%,\${p1y}% \${p2x}%,\${p2y}%\`} 
                       fill={zone.color}
                       stroke="rgba(255,255,255,0.8)"
                       strokeWidth="1.5"
                     />
                     <text
-                      x={`${tx}%`}
-                      y={`${ty}%`}
+                      x={\`\${tx}%\`}
+                      y={\`\${ty}%\`}
                       fill="white"
                       fontSize="14"
                       fontWeight="bold"
@@ -136,8 +138,8 @@ export function ImageOverlayModal({ src, onClose, actions }: ImageOverlayModalPr
               })}
               
               {/* Brahmasthan Center Marker */}
-              <circle cx={`${centerPos.x}%`} cy={`${centerPos.y}%`} r="6" fill="#fbbf24" stroke="white" strokeWidth="2" />
-              <circle cx={`${centerPos.x}%`} cy={`${centerPos.y}%`} r="24" fill="transparent" stroke="rgba(251, 191, 36, 0.5)" strokeWidth="2" strokeDasharray="4 4" />
+              <circle cx={\`\${centerPos.x}%\`} cy={\`\${centerPos.y}%\`} r="6" fill="#fbbf24" stroke="white" strokeWidth="2" />
+              <circle cx={\`\${centerPos.x}%\`} cy={\`\${centerPos.y}%\`} r="24" fill="transparent" stroke="rgba(251, 191, 36, 0.5)" strokeWidth="2" strokeDasharray="4 4" />
             </svg>
           )}
         </div>
@@ -170,7 +172,7 @@ export function ImageOverlayModal({ src, onClose, actions }: ImageOverlayModalPr
         <div className="flex flex-wrap items-center justify-center gap-4">
           <button
             onClick={() => setShowGrid(!showGrid)}
-            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${showGrid ? 'bg-amber-500 text-white shadow-[0_0_20px_rgba(245,158,11,0.4)]' : 'bg-white/10 hover:bg-white/20 text-white'}`}
+            className={\`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all \${showGrid ? 'bg-amber-500 text-white shadow-[0_0_20px_rgba(245,158,11,0.4)]' : 'bg-white/10 hover:bg-white/20 text-white'}\`}
           >
             <Grid3X3 className="w-5 h-5" /> {showGrid ? '16-Zone Mandala Active' : 'Overlay 16-Zone Mandala'}
           </button>
@@ -180,3 +182,6 @@ export function ImageOverlayModal({ src, onClose, actions }: ImageOverlayModalPr
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/ImageOverlayModal.tsx', code);

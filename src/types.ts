@@ -32,4 +32,13 @@ export interface AnalysisHistory {
   houseName?: string;
   timestamp: number;
   verifiedChecklistItems?: number[];
+  remedies?: VastuRemedy[];
+}
+
+export interface VastuRemedy {
+  defect: string;
+  zone: string;
+  remedy: string;
+  cost: 'Low' | 'Medium' | 'High';
+  effort: 'Low' | 'Medium' | 'High';
 }

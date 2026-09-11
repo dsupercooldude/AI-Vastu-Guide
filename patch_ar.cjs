@@ -1,4 +1,6 @@
+const fs = require('fs');
 
+const liveCameraCode = `
 import { useEffect, useRef, useState } from 'react';
 import { Camera, X, Compass as CompassIcon, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -16,7 +18,7 @@ const ZONES = [
   { range: [112.5, 157.5], name: 'South-East', deity: 'Agni', element: 'Fire', color: 'bg-red-500', advice: 'Perfect for the kitchen. Governs health and energy.' },
   { range: [157.5, 202.5], name: 'South', deity: 'Yama', element: 'Earth', color: 'bg-orange-600', advice: 'Ideal for bedrooms or heavy furniture. Brings stability.' },
   { range: [202.5, 247.5], name: 'South-West', deity: 'Nairutya', element: 'Earth', color: 'bg-yellow-600', advice: 'Best for Master Bedroom. Represents strength.' },
-  { range: [247.5, 292.5], name: 'West', deity: 'Varuna', element: 'Space', color: 'bg-indigo-400', advice: 'Good for dining or children\'s bedroom.' },
+  { range: [247.5, 292.5], name: 'West', deity: 'Varuna', element: 'Space', color: 'bg-indigo-400', advice: 'Good for dining or children\\'s bedroom.' },
   { range: [292.5, 337.5], name: 'North-West', deity: 'Vayu', element: 'Air', color: 'bg-sky-400', advice: 'Good for guest rooms or parking.' },
 ];
 
@@ -137,7 +139,7 @@ export function LiveCamera({ onCapture, onClose }: LiveCameraProps) {
             animate={{ opacity: 1, y: 0 }}
             className="absolute top-32 flex flex-col items-center text-center px-6 drop-shadow-2xl"
           >
-            <div className={`px-4 py-1 rounded-full text-white text-xs font-bold uppercase tracking-widest mb-3 shadow-lg ${currentZone.color}`}>
+            <div className={\`px-4 py-1 rounded-full text-white text-xs font-bold uppercase tracking-widest mb-3 shadow-lg \${currentZone.color}\`}>
               {currentZone.element} Element
             </div>
             <h2 className="text-5xl font-black text-white tracking-tight drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]">
@@ -152,7 +154,7 @@ export function LiveCamera({ onCapture, onClose }: LiveCameraProps) {
             {/* North Indicator */}
             <div 
               className="absolute w-full h-full transition-transform duration-75"
-              style={{ transform: `rotate(-${heading}deg)` }}
+              style={{ transform: \`rotate(-\${heading}deg)\` }}
             >
               <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 bg-red-500 text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(239,68,68,0.6)] border-2 border-white">N</div>
               <div className="absolute bottom-[-10px] left-1/2 -translate-x-1/2 bg-stone-800 text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center shadow-lg border-2 border-white/20">S</div>
@@ -161,7 +163,7 @@ export function LiveCamera({ onCapture, onClose }: LiveCameraProps) {
               
               {/* Tick marks for all 8 zones */}
               {[45, 135, 225, 315].map(deg => (
-                <div key={deg} className="absolute w-[2px] h-3 bg-white/50 left-1/2 -ml-[1px]" style={{ transform: `rotate(${deg}deg) translateY(-144px)` }} />
+                <div key={deg} className="absolute w-[2px] h-3 bg-white/50 left-1/2 -ml-[1px]" style={{ transform: \`rotate(\${deg}deg) translateY(-144px)\` }} />
               ))}
               
               {/* Crosshairs */}
@@ -184,7 +186,7 @@ export function LiveCamera({ onCapture, onClose }: LiveCameraProps) {
                 className="absolute bottom-8 mx-6 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl"
               >
                 <div className="flex items-start gap-3">
-                  <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${currentZone.color}`} />
+                  <div className={\`mt-0.5 w-2 h-2 rounded-full shrink-0 \${currentZone.color}\`} />
                   <p className="text-white/90 text-sm leading-snug">
                     {currentZone.advice}
                   </p>
@@ -213,3 +215,6 @@ export function LiveCamera({ onCapture, onClose }: LiveCameraProps) {
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/LiveCamera.tsx', liveCameraCode);
