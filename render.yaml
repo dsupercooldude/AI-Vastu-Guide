@@ -6,6 +6,8 @@ services:
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     envVars:
+      - key: PORT
+        value: "3000"
       - key: NODE_ENV
         value: production
       - key: GEMINI_API_KEY
