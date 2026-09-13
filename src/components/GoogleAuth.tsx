@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../firebase';
-import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, GoogleAuthProvider, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { DataMigrator } from './DataMigrator';
 
 export function GoogleAuth({ children }: { children: React.ReactNode }) {
@@ -15,9 +15,14 @@ export function GoogleAuth({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const login = () => {
+  const login = async () => {
     const provider = new GoogleAuthProvider();
-    signInWithPopup(auth, provider).catch(console.error);
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      console.warn("signInWithPopup failed (often due to Incognito mode). Falling back to signInWithRedirect...", error);
+      signInWithRedirect(auth, provider).catch(console.error);
+    }
   };
 
   if (loading) {
