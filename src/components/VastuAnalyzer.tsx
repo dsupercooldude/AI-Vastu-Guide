@@ -1,12 +1,13 @@
 import Markdown from 'react-markdown';
 import { useState, useRef, useEffect } from 'react';
-import { Camera, Activity, Upload, AlertCircle, ArrowRight, X, LayoutTemplate, Plus, Maximize2, RefreshCw, MapPin, Trash2 } from 'lucide-react';
+import { Camera, Activity, Upload, AlertCircle, ArrowRight, X, LayoutTemplate, Plus, Maximize2, RefreshCw, MapPin, Trash2, Compass as CompassIcon, Sparkles, FileImage } from 'lucide-react';
 import { ConfidenceMeter } from './ConfidenceMeter';
 import { LiveCamera } from './LiveCamera';
 import { AIEngineUsage } from './AIEngineUsage';
 import { VastuMap } from './VastuMap';
 import { Compass } from './Compass';
 import { ImageOverlayModal } from './ImageOverlayModal';
+import { AIFloorPlanMappingSection } from './AIFloorPlanMappingSection';
 import { compressImage, saveHouseImages, getHouseImages, deleteImage, ImageItem } from '../utils/imageUtils';
 
 interface VastuAnalyzerProps {
@@ -48,6 +49,24 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
   const floorPlanInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const [selectedFloorPlanIndex, setSelectedFloorPlanIndex] = useState<number>(0);
+  const [activeCalibration, setActiveCalibration] = useState<{ rotation: number; centerX: number; centerY: number; radiusScale: number } | null>(null);
+
+  const handleLoadSampleFloorPlan = async () => {
+    const sampleUrl = '/assets/aistudio/IMG_1034_76ed20b1.jpeg';
+    const sampleItem: ImageItem = {
+      id: crypto.randomUUID(),
+      preview: sampleUrl,
+      base64: sampleUrl,
+      mimeType: 'image/jpeg'
+    };
+    setFloorPlans(prev => [sampleItem, ...prev]);
+    setSelectedFloorPlanIndex(0);
+    if (houseId) {
+      saveHouseImages(houseId, 'floorPlans', [sampleItem, ...floorPlans]);
+    }
+  };
 
   useEffect(() => {
     if (houseId) {
@@ -163,10 +182,11 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
     }
     try {
       const locationContext = location ? `\nProperty coordinates: ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}. Please note its magnetic orientation based on these coordinates.` : '';
+      const calibrationContext = activeCalibration ? `\nAI/User Calibrated Floor Plan Direction: True North is rotated at ${activeCalibration.rotation.toFixed(1)} degrees. Centroid Brahmasthan is at (${activeCalibration.centerX.toFixed(1)}%, ${activeCalibration.centerY.toFixed(1)}%). Radius Scale: ${activeCalibration.radiusScale.toFixed(2)}.` : '';
       await onAnalyze(
         images.map(img => ({ data: img.base64 || img.preview, mimeType: img.mimeType })),
         floorPlans.map(fp => ({ data: fp.base64 || fp.preview, mimeType: fp.mimeType })),
-        description + locationContext,
+        description + locationContext + calibrationContext,
         houseName
       );
       // Reset form
@@ -188,6 +208,7 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
       {previewImage && (
         <ImageOverlayModal
           src={previewImage.preview}
+          houseName={houseName}
           onClose={() => setPreviewImage(null)}
           actions={
             <>
@@ -246,47 +267,98 @@ export function VastuAnalyzer({ onAnalyze, loading, confidence, onRefreshBaselin
           <div className="space-y-3">
             <h3 className="font-semibold text-stone-800 flex items-center gap-2">
               <LayoutTemplate className="w-5 h-5 text-amber-600" />
-              1. Floor Plan (Optional but Recommended)
+              1. Floor Plan & AI Direction Mapping
             </h3>
             
             {floorPlans.length > 0 ? (
-              <div className="flex flex-wrap gap-4">
-                {floorPlans.map((fp) => (
-                  <div key={fp.id} className="relative inline-block shrink-0">
-                    <div className="group relative w-32 h-32 rounded-xl border border-stone-200 overflow-hidden cursor-pointer" onClick={() => setPreviewImage(fp)}>
-                      <img src={fp.preview} alt="Floor plan preview" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                        <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" />
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  {floorPlans.map((fp, idx) => {
+                    const isSelected = selectedFloorPlanIndex === idx;
+                    return (
+                      <div key={fp.id} className="relative inline-block shrink-0">
+                        <div 
+                          className={`group relative w-32 h-32 rounded-xl overflow-hidden cursor-pointer shadow-sm transition-all ${
+                            isSelected 
+                              ? 'border-3 border-amber-500 ring-2 ring-amber-500/30' 
+                              : 'border-2 border-stone-200 hover:border-amber-400'
+                          }`}
+                          onClick={() => setSelectedFloorPlanIndex(idx)}
+                        >
+                          <img src={fp.preview} alt="Floor plan preview" className="w-full h-full object-cover" />
+                          <div className={`absolute inset-0 transition-colors flex flex-col items-center justify-center p-1.5 text-center ${
+                            isSelected ? 'bg-amber-950/40' : 'bg-stone-950/40 group-hover:bg-stone-950/60'
+                          }`}>
+                            <CompassIcon className="w-5 h-5 text-amber-400 mb-0.5" />
+                            <span className="text-[10px] font-bold text-white leading-tight">
+                              {isSelected ? 'Active Plan' : 'Select to Map'}
+                            </span>
+                          </div>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            removeFloorPlan(fp.id);
+                            if (selectedFloorPlanIndex >= floorPlans.length - 1) {
+                              setSelectedFloorPlanIndex(Math.max(0, floorPlans.length - 2));
+                            }
+                          }}
+                          className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md border border-stone-200 hover:text-red-500 z-10 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                    </div>
-                    <button 
-                      type="button" 
-                      onClick={() => removeFloorPlan(fp.id)}
-                      className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-md border border-stone-200 hover:text-red-500 z-10"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    );
+                  })}
+                  
+                  <button 
+                    type="button"
+                    onClick={() => floorPlanInputRef.current?.click()}
+                    className="w-32 h-32 border-2 border-dashed border-stone-300 rounded-xl flex flex-col items-center justify-center text-stone-500 hover:bg-stone-50 hover:border-amber-400 transition-colors cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-6 h-6 mb-1 text-stone-400" />
+                    <span className="text-xs font-medium">Add Another</span>
+                  </button>
+                </div>
+
+                {/* Dedicated AI Floor Plan Direction Mapping & Shakti Chakra Section */}
+                {floorPlans[selectedFloorPlanIndex] && (
+                  <div className="mt-4">
+                    <AIFloorPlanMappingSection
+                      key={floorPlans[selectedFloorPlanIndex].id || selectedFloorPlanIndex}
+                      floorPlanUrl={floorPlans[selectedFloorPlanIndex].preview}
+                      floorPlanData={floorPlans[selectedFloorPlanIndex].base64}
+                      mimeType={floorPlans[selectedFloorPlanIndex].mimeType || 'image/jpeg'}
+                      houseName={houseName}
+                      onCalibrationChange={(cal) => setActiveCalibration(cal)}
+                    />
                   </div>
-                ))}
-                
-                <button 
-                  type="button"
-                  onClick={() => floorPlanInputRef.current?.click()}
-                  className="w-32 h-32 border-2 border-dashed border-stone-300 rounded-xl flex flex-col items-center justify-center text-stone-500 hover:bg-stone-50 hover:border-amber-400 transition-colors"
-                >
-                  <Plus className="w-6 h-6 mb-1 text-stone-400" />
-                  <span className="text-xs font-medium">Add More</span>
-                </button>
+                )}
               </div>
             ) : (
-              <button 
-                type="button"
-                onClick={() => floorPlanInputRef.current?.click()}
-                className="w-full h-32 border-2 border-dashed border-stone-300 rounded-xl flex flex-col items-center justify-center text-stone-500 hover:bg-stone-50 hover:border-amber-400 transition-colors"
-              >
-                <LayoutTemplate className="w-8 h-8 mb-2 text-stone-400" />
-                <span className="text-sm font-medium">Upload Floor Plan(s)</span>
-              </button>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <button 
+                    type="button"
+                    onClick={() => floorPlanInputRef.current?.click()}
+                    className="w-full h-32 border-2 border-dashed border-stone-300 hover:border-amber-500 rounded-xl flex flex-col items-center justify-center text-stone-500 hover:bg-amber-50/20 transition-all cursor-pointer p-4 text-center"
+                  >
+                    <LayoutTemplate className="w-7 h-7 mb-1.5 text-amber-600" />
+                    <span className="text-sm font-bold text-stone-800">Upload Floor Plan / CAD Blueprint</span>
+                    <span className="text-xs text-stone-400 mt-0.5">Supports PNG, JPG, PDF blueprints for automatic AI direction detection</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={handleLoadSampleFloorPlan}
+                    className="w-full h-32 border-2 border-dashed border-amber-300 bg-amber-50/30 hover:bg-amber-50/60 rounded-xl flex flex-col items-center justify-center text-stone-700 hover:border-amber-500 transition-all cursor-pointer p-4 text-center"
+                  >
+                    <Sparkles className="w-7 h-7 mb-1.5 text-amber-500" />
+                    <span className="text-sm font-bold text-amber-950">Load Sample Architectural Floor Plan</span>
+                    <span className="text-xs text-amber-700/80 mt-0.5">Try instant AI direction mapping with Dubai standard blueprint</span>
+                  </button>
+                </div>
+              </div>
             )}
             <input 
               type="file" 

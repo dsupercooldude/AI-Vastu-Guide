@@ -15,6 +15,7 @@ import { ImageOverlayModal } from './components/ImageOverlayModal';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AIChat } from './components/AIChat';
+import { VastuAuditMultiTab } from './components/VastuAuditMultiTab';
 import Markdown from 'react-markdown';
 import { Home, History, MessageSquare, Plus, AlignLeft, RefreshCw, Clock, Lock, Download, ShieldAlert, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -55,7 +56,8 @@ export default function App() {
   const { profiles, currentProfileId, currentProfile, isAuthenticated, addProfile, switchProfile, authenticate, logout, switchUser, deleteProfile } = useProfiles();
   const { houses, currentHouseId, currentHouse, addHouse, switchHouse, deleteHouse } = useHouses(currentProfileId);
   const { messages, sendMessage, loading: chatLoading } = useChatHistory(currentProfileId);
-  const { history, allHistory, analyzeHouse, loading: analysisLoading } = useAnalysisHistory(currentHouseId);
+  const { history, allHistory, analyzeHouse, updateAnalysisGrid, loading: analysisLoading } = useAnalysisHistory(currentHouseId);
+  const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const [minScore, setMinScore] = useState(0);
@@ -327,64 +329,12 @@ export default function App() {
                 </div>
 
                 {history.length > 0 && (
-                  <div className="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-stone-200 border-l-4 border-l-amber-500">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-bold text-stone-800">Latest Analysis Report</h3>
-                      <button onClick={() => exportToPDF('latest-report', `Vastu_Report_${currentHouse?.name}.pdf`)} className="flex items-center gap-2 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg text-sm font-medium transition-colors"><Download className="w-4 h-4"/> Export PDF</button>
-                    </div>
-                    
-                    <div id="latest-report" className="prose prose-stone max-w-none bg-white p-4 rounded-xl">
-                      {history[0].zoneScores && history[0].zoneScores.length > 0 && (
-                        <div className="mb-8">
-                          <h4 className="text-sm font-bold text-stone-800 uppercase tracking-wide mb-4">Zone Compliance Breakdown</h4>
-                          <div className="h-64 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={history[0].zoneScores.map(z => ({ name: z.zone, score: z.score }))}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
-                                <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#78716c' }} />
-                                <Tooltip cursor={{fill: '#f5f5f4'}} content={<CustomTooltip />} />
-                                <Bar dataKey="score" fill="#d97706" radius={[4, 4, 0, 0]} />
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {history[0].floorPlans && history[0].floorPlans.map((fp, i) => (
-                          <div key={'fp-'+i} className="relative aspect-square rounded-lg overflow-hidden border border-stone-200">
-                            <img src={fp} alt="Floor Plan" className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(fp)} />
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 font-medium">Floor Plan {i+1}</div>
-                          </div>
-                        ))}
-                        {history[0].images && history[0].images.map((img, i) => (
-                          <div key={'img-'+i} className="relative aspect-square rounded-lg overflow-hidden border border-stone-200">
-                            <img src={img} alt="Property Image" className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(img)} />
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 font-medium">Photo {i+1}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <Markdown>{history[0].report}</Markdown>
-                      {history[0].remedies && history[0].remedies.length > 0 && (
-                        <div className="mt-8 pt-6 border-t border-stone-200">
-                          <h4 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2">
-                            <ShieldAlert className="w-5 h-5 text-amber-600" />
-                            Dosha Corrections & Remedies
-                          </h4>
-                          <ul className="space-y-3">
-                            {history[0].remedies.map((remedy, i) => (
-                              <li key={i} className="flex items-start gap-3 bg-amber-50/50 p-4 rounded-xl border border-amber-100">
-                                <div className="mt-0.5 w-6 h-6 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 font-bold text-xs">{i+1}</div>
-                                <p className="text-stone-700 leading-relaxed text-sm"><strong>{remedy.zone}</strong>: {remedy.defect} &rarr; {remedy.remedy}</p>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-
+                  <div className="mt-8">
+                    <VastuAuditMultiTab
+                      analysis={history[0]}
+                      houseName={currentHouse?.name || 'Property'}
+                      onSaveGrid={(dataUrl, config) => updateAnalysisGrid(history[0].id, dataUrl, config)}
+                    />
                   </div>
                 )}
               </motion.div>
@@ -535,77 +485,103 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="space-y-6">
-                      {filteredHistory.map(item => (
-                        <div key={item.id} className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 overflow-hidden flex flex-col md:flex-row gap-6">
-                          <div className="w-full md:w-64 shrink-0 flex flex-col gap-2">
-                            {item.houseName && (
-                              <>
-                                <h4 className="font-bold text-stone-800 mb-1">{item.houseName}</h4>
-                                <button onClick={() => exportToPDF(`report-${item.id}`, `Vastu_Report_${item.houseName}_${new Date(item.timestamp).getTime()}.pdf`)} className="flex items-center justify-center gap-2 px-2 py-1 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded text-xs font-medium transition-colors mt-1 w-fit"><Download className="w-3 h-3"/> PDF</button>
-                              </>
-                            )}
-                            {item.floorPlans && item.floorPlans.length > 0 && (
-                              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">{item.floorPlans.map((fp, i) => (<img key={`fp-${i}`} src={fp} alt={`Floor Plan ${i}`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(fp)} />))}</div>
-                            )}
-                            {item.images && item.images.length > 0 && (
-                              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
-                                {item.images.map((img, i) => (
-                                  <img key={i} src={img} alt={`Room ${i}`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(img)} />
-                                ))}
-                              </div>
-                            )}
-                            <div className="mt-2 space-y-1">
-                              <p className="text-xs text-stone-400">{new Date(item.timestamp).toLocaleDateString()}</p>
-                              {item.score !== undefined && (
-                                <div className="mt-2 inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold text-xs">
-                                  Score: {item.score}/100
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            
-                            <div id={`report-${item.id}`} className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar bg-white p-2">
-                              <Markdown>{item.report}</Markdown>
-                              
-                              {item.remedies && item.remedies.length > 0 && (
-                                <div className="mt-6 border-t border-stone-100 pt-6">
-                                  <h4 className="font-bold text-stone-800 mb-4 flex items-center gap-2">
-                                    <ShieldAlert className="w-5 h-5 text-amber-600" />
-                                    Dosha Corrections & Remedies
-                                  </h4>
-                                  <div className="grid gap-3">
-                                    {item.remedies.map((remedy, i) => (
-                                      <div key={i} className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-4">
-                                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-2">
-                                          <div className="flex items-start gap-2">
-                                            <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0 mt-0.5">
-                                              {remedy.zone}
-                                            </span>
-                                            <p className="font-semibold text-stone-800 text-sm leading-tight">{remedy.defect}</p>
-                                          </div>
-                                          <div className="flex items-center gap-2 shrink-0">
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${remedy.cost === 'Low' ? 'bg-green-100 text-green-700' : remedy.cost === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                                              Cost: {remedy.cost}
-                                            </span>
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${remedy.effort === 'Low' ? 'bg-blue-100 text-blue-700' : remedy.effort === 'Medium' ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
-                                              Effort: {remedy.effort}
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <p className="text-sm text-stone-600 mt-2 pl-1">
-                                          <span className="font-semibold text-amber-800">Action:</span> {remedy.remedy}
-                                        </p>
-                                      </div>
+                      {filteredHistory.map(item => {
+                        const isExpanded = expandedAuditId === item.id;
+                        return (
+                          <div key={item.id} className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 overflow-hidden">
+                            <div className="flex flex-col md:flex-row gap-6">
+                              <div className="w-full md:w-64 shrink-0 flex flex-col gap-2">
+                                {item.houseName && (
+                                  <>
+                                    <h4 className="font-bold text-stone-800 mb-1">{item.houseName}</h4>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <button onClick={() => exportToPDF(`report-${item.id}`, `Vastu_Report_${item.houseName}_${new Date(item.timestamp).getTime()}.pdf`)} className="flex items-center justify-center gap-1.5 px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded text-xs font-medium transition-colors cursor-pointer"><Download className="w-3 h-3"/> PDF</button>
+                                      <button 
+                                        onClick={() => setExpandedAuditId(isExpanded ? null : item.id)} 
+                                        className={`flex items-center justify-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold transition-colors cursor-pointer ${
+                                          isExpanded ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
+                                        }`}
+                                      >
+                                        {isExpanded ? 'Close Multi-Tab' : 'Multi-Tab Audit'}
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                                {item.floorPlans && item.floorPlans.length > 0 && (
+                                  <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">{item.floorPlans.map((fp, i) => (<img key={`fp-${i}`} src={fp} alt={`Floor Plan ${i}`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(fp)} />))}</div>
+                                )}
+                                {item.images && item.images.length > 0 && (
+                                  <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2">
+                                    {item.images.map((img, i) => (
+                                      <img key={i} src={img} alt={`Room ${i}`} className="w-20 h-20 object-cover rounded-lg shrink-0 border border-stone-200 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setPreviewImageSrc(img)} />
                                     ))}
                                   </div>
+                                )}
+                                <div className="mt-2 space-y-1">
+                                  <p className="text-xs text-stone-400">{new Date(item.timestamp).toLocaleDateString()}</p>
+                                  {item.score !== undefined && (
+                                    <div className="mt-2 inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold text-xs">
+                                      Score: {item.score}/100
+                                    </div>
+                                  )}
                                 </div>
-                              )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                
+                                <div id={`report-${item.id}`} className="prose prose-sm prose-stone max-w-none max-h-60 overflow-y-auto pr-2 custom-scrollbar bg-white p-2">
+                                  <Markdown>{item.report}</Markdown>
+                                  
+                                  {item.remedies && item.remedies.length > 0 && (
+                                    <div className="mt-6 border-t border-stone-100 pt-6">
+                                      <h4 className="font-bold text-stone-800 mb-4 flex items-center gap-2">
+                                        <ShieldAlert className="w-5 h-5 text-amber-600" />
+                                        Dosha Corrections & Remedies
+                                      </h4>
+                                      <div className="grid gap-3">
+                                        {item.remedies.map((remedy, i) => (
+                                          <div key={i} className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-4">
+                                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-2">
+                                              <div className="flex items-start gap-2">
+                                                <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0 mt-0.5">
+                                                  {remedy.zone}
+                                                </span>
+                                                <p className="font-semibold text-stone-800 text-sm leading-tight">{remedy.defect}</p>
+                                              </div>
+                                              <div className="flex items-center gap-2 shrink-0">
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${remedy.cost === 'Low' ? 'bg-green-100 text-green-700' : remedy.cost === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                                                  Cost: {remedy.cost}
+                                                </span>
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${remedy.effort === 'Low' ? 'bg-blue-100 text-blue-700' : remedy.effort === 'Medium' ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'}`}>
+                                                  Effort: {remedy.effort}
+                                                </span>
+                                              </div>
+                                            </div>
+                                            <p className="text-sm text-stone-600 mt-2 pl-1">
+                                              <span className="font-semibold text-amber-800">Action:</span> {remedy.remedy}
+                                            </p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                              </div>
                             </div>
 
+                            {/* Expandable Full Multi-Tab Audit */}
+                            {isExpanded && (
+                              <div className="mt-6 pt-6 border-t border-stone-200">
+                                <VastuAuditMultiTab
+                                  analysis={item}
+                                  houseName={item.houseName || 'Property'}
+                                  onSaveGrid={(dataUrl, config) => updateAnalysisGrid(item.id, dataUrl, config)}
+                                />
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </motion.div>

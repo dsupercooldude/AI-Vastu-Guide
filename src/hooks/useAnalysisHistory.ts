@@ -123,7 +123,16 @@ export function useAnalysisHistory(houseId: string | null) {
       }
       
       if (!finalData) throw new Error('Analysis failed to complete.');
-      const data = { result: finalData.result, score: finalData.score, zoneScores: finalData.zoneScores, verifiedChecklistItems: finalData.verifiedChecklistItems, remedies: finalData.remedies };
+      const data = { 
+        result: finalData.result, 
+        score: finalData.score, 
+        zoneScores: finalData.zoneScores, 
+        verifiedChecklistItems: finalData.verifiedChecklistItems, 
+        remedies: finalData.remedies,
+        mainEntrancePada: finalData.mainEntrancePada || 'N4',
+        padas: finalData.padas,
+        gridCalibration: finalData.gridCalibration
+      };
       window.dispatchEvent(new CustomEvent('vastu_partial_report', { detail: '' })); // clear partial
       
 
@@ -139,7 +148,7 @@ export function useAnalysisHistory(houseId: string | null) {
           } else {
             let base64Data = img.data;
             if (!base64Data.startsWith('data:')) {
-               base64Data = `data:${img.mimeType || 'image/jpeg'};base64,${base64Data}`;
+                base64Data = `data:${img.mimeType || 'image/jpeg'};base64,${base64Data}`;
             }
             urls.push(base64Data);
           }
@@ -163,14 +172,14 @@ export function useAnalysisHistory(houseId: string | null) {
         timestamp: Date.now(),
         verifiedChecklistItems: data.verifiedChecklistItems,
         remedies: data.remedies,
+        mainEntrancePada: data.mainEntrancePada,
+        padas: data.padas,
+        gridCalibration: data.gridCalibration,
         userId
       };
       
-      
-      
       Object.keys(newAnalysis).forEach(key => newAnalysis[key] === undefined && delete newAnalysis[key]);
 
-      
       await setDoc(doc(db, `users/${userId}/history/${id}`), newAnalysis);
       return newAnalysis;
     } catch (e: any) {
@@ -181,5 +190,18 @@ export function useAnalysisHistory(houseId: string | null) {
     }
   };
 
-  return { history, allHistory, analyzeHouse, loading };
+  const updateAnalysisGrid = async (analysisId: string, mappedGridImage: string, gridCalibration: any) => {
+    if (!auth.currentUser) return;
+    const userId = auth.currentUser.uid;
+    try {
+      await setDoc(doc(db, `users/${userId}/history/${analysisId}`), {
+        mappedGridImage,
+        gridCalibration
+      }, { merge: true });
+    } catch (e) {
+      console.error('Failed to update grid calibration', e);
+    }
+  };
+
+  return { history, allHistory, analyzeHouse, updateAnalysisGrid, loading };
 }
