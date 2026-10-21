@@ -268,6 +268,7 @@ export default function App() {
                 </div>
               </div>
             </div>
+          </div>
           
           <div className="pt-6 border-t border-stone-800 text-xs text-stone-500 text-center">
             Logged in as <span className="text-stone-300">{currentProfile?.name}</span>
@@ -591,7 +592,6 @@ export default function App() {
           </div>
         </main>
       </div>
-    </div>
     </div>
     </>
   );

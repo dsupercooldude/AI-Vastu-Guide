@@ -13,7 +13,23 @@ export function useProfiles() {
     let unsubscribeDb = () => {};
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user) {
-        setProfiles([]);
+        try {
+          const raw = localStorage.getItem('vastu_local_profiles');
+          let local = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(local) || local.length === 0) {
+            local = [{ id: 'default-profile', name: 'Primary Household' }];
+            localStorage.setItem('vastu_local_profiles', JSON.stringify(local));
+          }
+          setProfiles(local);
+          const active = localStorage.getItem('vastu_active_profile') || local[0].id;
+          setCurrentProfileId(active);
+          setIsAuthenticated(true);
+        } catch {
+          const fallback = [{ id: 'default-profile', name: 'Primary Household' }];
+          setProfiles(fallback);
+          setCurrentProfileId('default-profile');
+          setIsAuthenticated(true);
+        }
         return;
       }
       const userId = user.uid;
@@ -54,13 +70,18 @@ export function useProfiles() {
   }, []); // Only run once on mount
 
   const addProfile = async (name: string, password?: string) => {
-    if (!auth.currentUser) return;
-    const userId = auth.currentUser.uid;
     const id = crypto.randomUUID();
-    const newProfile = { id, name, password: password || undefined, userId };
-    
+    const newProfile = { id, name, password: password || undefined };
+    if (!auth.currentUser) {
+      const updated = [...profiles, newProfile];
+      setProfiles(updated);
+      localStorage.setItem('vastu_local_profiles', JSON.stringify(updated));
+      switchProfile(id, true);
+      return;
+    }
+    const userId = auth.currentUser.uid;
     try {
-      await setDoc(doc(db, `users/${userId}/profiles/${id}`), newProfile);
+      await setDoc(doc(db, `users/${userId}/profiles/${id}`), { ...newProfile, userId });
       switchProfile(id, true);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `users/${userId}/profiles/${id}`);
@@ -98,7 +119,21 @@ export function useProfiles() {
   };
 
   const deleteProfile = async (id: string) => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+      const remaining = profiles.filter(p => p.id !== id);
+      setProfiles(remaining);
+      localStorage.setItem('vastu_local_profiles', JSON.stringify(remaining));
+      if (currentProfileId === id) {
+        setIsAuthenticated(false);
+        if (remaining.length > 0) {
+          switchProfile(remaining[0].id);
+        } else {
+          setCurrentProfileId(null);
+          localStorage.removeItem('vastu_active_profile');
+        }
+      }
+      return;
+    }
     const userId = auth.currentUser.uid;
     
     try {

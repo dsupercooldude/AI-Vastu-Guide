@@ -73,11 +73,21 @@ export function FloorPlanGridMapper({
 
   // Pre-load image
   useEffect(() => {
+    if (!imageSrc) return;
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       imageObjRef.current = img;
       redraw();
+    };
+    img.onerror = () => {
+      // Fallback without crossOrigin in case CORS header is omitted
+      const fallbackImg = new Image();
+      fallbackImg.onload = () => {
+        imageObjRef.current = fallbackImg;
+        redraw();
+      };
+      fallbackImg.src = imageSrc;
     };
     img.src = imageSrc;
   }, [imageSrc]);

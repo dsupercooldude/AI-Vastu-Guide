@@ -104,7 +104,11 @@ service cloud.firestore {
         && ( !('zoneScores' in data) || (data.zoneScores is list) )
         && ( !('houseName' in data) || (data.houseName is string && data.houseName.size() <= 100) )
         && ( !('verifiedChecklistItems' in data) || data.verifiedChecklistItems is list )
-        && ( !('remedies' in data) || data.remedies is list );
+        && ( !('remedies' in data) || data.remedies is list )
+        && ( !('mainEntrancePada' in data) || (data.mainEntrancePada is string && data.mainEntrancePada.size() <= 10) )
+        && ( !('padas' in data) || data.padas is list )
+        && ( !('gridCalibration' in data) || data.gridCalibration is map )
+        && ( !('mappedGridImage' in data) || (data.mappedGridImage is string && data.mappedGridImage.size() <= 2000000) );
     }
 
     match /users/{userId}/history/{historyId} {
@@ -120,7 +124,7 @@ service cloud.firestore {
                     && incoming().houseId == existing().houseId
                     && incoming().timestamp == existing().timestamp
                     && incoming().images == existing().images
-                    && incoming().diff(existing()).affectedKeys().hasOnly(['description', 'report', 'score', 'zoneScores', 'houseName', 'verifiedChecklistItems', 'remedies']);
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['description', 'report', 'score', 'zoneScores', 'houseName', 'verifiedChecklistItems', 'remedies', 'mappedGridImage', 'gridCalibration', 'mainEntrancePada']);
       allow delete: if isOwner(userId) && existing().userId == request.auth.uid;
     }
 

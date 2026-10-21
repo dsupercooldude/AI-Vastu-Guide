@@ -14,8 +14,13 @@ export function DataMigrator({ children }: { children: React.ReactNode }) {
     };
     
     const migrate = async () => {
+      const timeout = setTimeout(() => {
+        setMigrating(false);
+      }, 2500);
+
       const migratedFlag = localStorage.getItem('vastu_migration_done');
       if (migratedFlag === 'true' || !auth.currentUser) {
+        clearTimeout(timeout);
         setMigrating(false);
         return;
       }

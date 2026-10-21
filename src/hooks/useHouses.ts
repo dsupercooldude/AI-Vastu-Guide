@@ -13,6 +13,34 @@ export function useHouses(profileId: string | null) {
     
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user || !profileId) {
+        if (!user && profileId) {
+          try {
+            const key = `vastu_local_houses_${profileId}`;
+            const raw = localStorage.getItem(key);
+            let local = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(local) || local.length === 0) {
+              local = [{
+                id: 'default-house',
+                profileId,
+                name: 'Main Residence',
+                createdAt: Date.now()
+              }];
+              localStorage.setItem(key, JSON.stringify(local));
+            }
+            setHouses(local);
+            setCurrentHouseId(prev => prev || local[0].id);
+          } catch {
+            const fallback = [{
+              id: 'default-house',
+              profileId,
+              name: 'Main Residence',
+              createdAt: Date.now()
+            }];
+            setHouses(fallback);
+            setCurrentHouseId('default-house');
+          }
+          return;
+        }
         setHouses([]);
         setCurrentHouseId(null);
         return;
@@ -55,20 +83,27 @@ export function useHouses(profileId: string | null) {
   }, [profileId]); // removed currentHouseId to prevent infinite re-renders/unsubs
 
   const addHouse = async (name: string) => {
-    if (!profileId || !auth.currentUser) return;
-    const userId = auth.currentUser.uid;
-    
+    if (!profileId) return;
     const id = crypto.randomUUID();
     const newHouse = {
       id,
       profileId,
       name,
-      createdAt: Date.now(),
-      userId
+      createdAt: Date.now()
     };
     
+    if (!auth.currentUser) {
+      const key = `vastu_local_houses_${profileId}`;
+      const updated = [newHouse, ...houses];
+      setHouses(updated);
+      localStorage.setItem(key, JSON.stringify(updated));
+      setCurrentHouseId(id);
+      return;
+    }
+
+    const userId = auth.currentUser.uid;
     try {
-      await setDoc(doc(db, `users/${userId}/houses/${id}`), newHouse);
+      await setDoc(doc(db, `users/${userId}/houses/${id}`), { ...newHouse, userId });
       setCurrentHouseId(id);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `users/${userId}/houses/${id}`);
@@ -80,18 +115,26 @@ export function useHouses(profileId: string | null) {
   };
 
   const deleteHouse = async (id: string) => {
-    if (!profileId || !auth.currentUser) return;
+    if (!profileId) return;
+
+    if (!auth.currentUser) {
+      const key = `vastu_local_houses_${profileId}`;
+      const remaining = houses.filter(h => h.id !== id);
+      setHouses(remaining);
+      localStorage.setItem(key, JSON.stringify(remaining));
+      if (currentHouseId === id) {
+        setCurrentHouseId(remaining.length > 0 ? remaining[0].id : null);
+      }
+      return;
+    }
+
     const userId = auth.currentUser.uid;
-    
     try {
       await deleteDoc(doc(db, `users/${userId}/houses/${id}`));
       if (currentHouseId === id) {
         const remaining = houses.filter(h => h.id !== id);
         setCurrentHouseId(remaining.length > 0 ? remaining[0].id : null);
       }
-      
-      // Ideally we would delete associated history and chat here via cloud function
-      // but for client-side we'll leave it orphaned or do a query-delete
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `users/${userId}/houses/${id}`);
     }

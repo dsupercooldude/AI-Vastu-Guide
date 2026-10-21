@@ -14,7 +14,13 @@ export function useAnalysisHistory(houseId: string | null) {
     let unsubscribeAll = () => {};
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user) {
-        setAllHistory([]);
+        try {
+          const raw = localStorage.getItem('vastu_local_history');
+          const all = raw ? JSON.parse(raw) : [];
+          setAllHistory(all);
+        } catch {
+          setAllHistory([]);
+        }
         return;
       }
       const userId = user.uid;
@@ -42,6 +48,17 @@ export function useAnalysisHistory(houseId: string | null) {
     let unsubscribeDb = () => {};
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user || !houseId) {
+        if (!user && houseId) {
+          try {
+            const raw = localStorage.getItem('vastu_local_history');
+            const all: any[] = raw ? JSON.parse(raw) : [];
+            const loaded = all.filter(h => h.houseId === houseId);
+            setHistory(loaded);
+          } catch {
+            setHistory([]);
+          }
+          return;
+        }
         setHistory([]);
         return;
       }
@@ -73,8 +90,8 @@ export function useAnalysisHistory(houseId: string | null) {
     description: string,
     houseName: string
   ) => {
-    if (!houseId || !auth.currentUser) return;
-    const userId = auth.currentUser.uid;
+    if (!houseId) return;
+    const userId = auth.currentUser?.uid || 'guest-user';
     
     setLoading(true);
     
@@ -180,6 +197,18 @@ export function useAnalysisHistory(houseId: string | null) {
       
       Object.keys(newAnalysis).forEach(key => newAnalysis[key] === undefined && delete newAnalysis[key]);
 
+      if (!auth.currentUser) {
+        try {
+          const raw = localStorage.getItem('vastu_local_history');
+          const all = raw ? JSON.parse(raw) : [];
+          const updated = [newAnalysis, ...all];
+          localStorage.setItem('vastu_local_history', JSON.stringify(updated));
+          setHistory(prev => [newAnalysis, ...prev]);
+          setAllHistory(updated);
+        } catch {}
+        return newAnalysis;
+      }
+
       await setDoc(doc(db, `users/${userId}/history/${id}`), newAnalysis);
       return newAnalysis;
     } catch (e: any) {
@@ -191,7 +220,17 @@ export function useAnalysisHistory(houseId: string | null) {
   };
 
   const updateAnalysisGrid = async (analysisId: string, mappedGridImage: string, gridCalibration: any) => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+      try {
+        const raw = localStorage.getItem('vastu_local_history');
+        const all: any[] = raw ? JSON.parse(raw) : [];
+        const updated = all.map(h => h.id === analysisId ? { ...h, mappedGridImage, gridCalibration } : h);
+        localStorage.setItem('vastu_local_history', JSON.stringify(updated));
+        setHistory(prev => prev.map(h => h.id === analysisId ? { ...h, mappedGridImage, gridCalibration } : h));
+        setAllHistory(updated);
+      } catch {}
+      return;
+    }
     const userId = auth.currentUser.uid;
     try {
       await setDoc(doc(db, `users/${userId}/history/${analysisId}`), {
